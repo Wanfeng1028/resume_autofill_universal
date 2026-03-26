@@ -1,9 +1,9 @@
 ﻿// ==UserScript==
 // @name         Resume Autofill Universal
-// @namespace    https://codex.local/
+// @namespace    
 // @version      0.2.0
 // @description  Parse resumes into local profiles and auto-fill recruitment forms with profile switching, mapping UI, OCR, and site-specific rules.
-// @author       Codex
+// @author       
 // @match        *://*/*
 // @grant        GM_setValue
 // @grant        GM_getValue
