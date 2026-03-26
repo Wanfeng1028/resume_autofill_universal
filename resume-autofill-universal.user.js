@@ -1,9 +1,9 @@
 ﻿// ==UserScript==
 // @name         Resume Autofill Universal
-// @namespace    
+// @namespace    resume_autofill_universal
 // @version      0.2.0
 // @description  Parse resumes into local profiles and auto-fill recruitment forms with profile switching, mapping UI, OCR, and site-specific rules.
-// @author       
+// @author       @wanfeng
 // @match        *://*/*
 // @grant        GM_setValue
 // @grant        GM_getValue
