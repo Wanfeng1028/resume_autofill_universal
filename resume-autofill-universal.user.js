@@ -119,7 +119,34 @@
   function getSiteAdapter() { const host = getSiteKey(); return Object.values(SITE_ADAPTERS).find((item) => item.hosts.some((x) => host.includes(x))) || { selectors: [], aliases: {} }; }
   function log(message) { state.logs.push(`${new Date().toLocaleTimeString()} ${message}`); state.logs = state.logs.slice(-80); saveState(); const box = document.querySelector('#rau-log'); if (box) box.textContent = state.logs.join('\n'); }
   function notify(text) { if (typeof GM_notification === 'function') GM_notification({ title: '简历自动填表', text, timeout: 3500 }); }
-  function registerMenu() { GM_registerMenuCommand('打开简历自动填表面板', openPanel); GM_registerMenuCommand('执行自动填写', () => autofillActiveProfile({})); GM_registerMenuCommand('导出全部数据', exportStateToFile); }
+  function registerMenu() {
+    GM_registerMenuCommand('??????????', () => safeCall('openPanel', openPanel));
+    GM_registerMenuCommand('??????', () => safeCall('autofill', () => autofillActiveProfile({})));
+    GM_registerMenuCommand('??????', () => safeCall('export', exportStateToFile));
+  }
+  function safeCall(action, fn) {
+    try { return fn(); } catch (error) {
+      console.error('[Resume Autofill Universal]', action, error);
+      showFallbackPanel(error, action);
+      return null;
+    }
+  }
+  function showFallbackPanel(error, action) {
+    let panel = document.querySelector('#rau-panel');
+    if (!panel) {
+      panel = document.createElement('aside');
+      panel.id = 'rau-panel';
+      document.body.appendChild(panel);
+    }
+    const msg = (error && error.message) ? error.message : String(error || 'Unknown error');
+    panel.innerHTML = `<div style="padding:16px;font:14px/1.5 Segoe UI,sans-serif;background:#fff;border:1px solid #ddd;border-radius:12px"><h3 style="margin:0 0 10px">????????</h3><div style="font-size:12px;color:#333;white-space:pre-wrap">Action: ${action}\n${msg}</div><div style="margin-top:12px;display:flex;gap:8px"><button id="rau-retry" style="padding:8px 12px;border:none;border-radius:8px;background:#0f766e;color:#fff;cursor:pointer">????</button><button id="rau-reset" style="padding:8px 12px;border:none;border-radius:8px;background:#dc2626;color:#fff;cursor:pointer">??????</button><button id="rau-close-fallback" style="padding:8px 12px;border:none;border-radius:8px;background:#e2e8f0;color:#111;cursor:pointer">??</button></div></div>`;
+    const retry = panel.querySelector('#rau-retry');
+    const reset = panel.querySelector('#rau-reset');
+    const close = panel.querySelector('#rau-close-fallback');
+    if (retry) retry.addEventListener('click', () => { try { renderPanel(panel); } catch (e) { console.error(e); } });
+    if (reset) reset.addEventListener('click', () => { try { GM_setValue(STORAGE_KEY, ''); location.reload(); } catch (e) { console.error(e); } });
+    if (close) close.addEventListener('click', () => panel.remove());
+  }
   function renderLauncherWhenReady() {
     const mount = () => {
       try { renderLauncher(); } catch (error) { console.error('[Resume Autofill Universal] renderLauncher failed', error); }
@@ -137,8 +164,16 @@
   function injectStyles() {
     GM_addStyle(`#rau-launcher{position:fixed;right:20px;bottom:20px;z-index:2147483646;border:none;border-radius:999px;padding:12px 16px;background:linear-gradient(135deg,#0f766e,#0ea5e9);color:#fff;cursor:pointer;font:600 14px/1.2 "Segoe UI",sans-serif;box-shadow:0 16px 40px rgba(2,132,199,.35)}#rau-panel{position:fixed;top:18px;right:18px;width:470px;max-height:calc(100vh - 36px);overflow:auto;z-index:2147483647;background:#f8fafc;color:#0f172a;border:1px solid rgba(15,23,42,.1);border-radius:22px;box-shadow:0 28px 100px rgba(15,23,42,.28);font:14px/1.45 "Segoe UI",sans-serif}#rau-panel *{box-sizing:border-box}.rau-head{padding:18px;background:radial-gradient(circle at top left,#ecfeff,#f8fafc 58%)}.rau-row{display:flex;gap:10px;align-items:center}.rau-row+.rau-row{margin-top:10px}.rau-grow{flex:1}.rau-title{margin:0;font-size:18px;font-weight:700}.rau-sub{margin-top:4px;font-size:12px;color:#475569}.rau-section{padding:14px 18px;border-top:1px solid rgba(15,23,42,.08)}.rau-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.rau-tab{border:none;border-radius:999px;padding:8px 12px;background:#e2e8f0;color:#0f172a;cursor:pointer;font-weight:600}.rau-tab.is-active{background:#0f766e;color:#fff}.rau-input,.rau-select,.rau-textarea{width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:12px;background:#fff;color:#0f172a}.rau-textarea{min-height:86px;resize:vertical}.rau-btn{border:none;border-radius:12px;padding:10px 12px;cursor:pointer;font-weight:600}.rau-btn-primary{background:#0f766e;color:#fff}.rau-btn-secondary{background:#e2e8f0;color:#0f172a}.rau-btn-danger{background:#dc2626;color:#fff}.rau-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.rau-field{display:flex;flex-direction:column;gap:6px}.rau-small{font-size:12px;color:#475569}.rau-meta{font-size:12px;color:#64748b}.rau-log{background:#0f172a;color:#cbd5e1;padding:10px;border-radius:12px;font:12px/1.5 Consolas,monospace;white-space:pre-wrap;max-height:220px;overflow:auto}.rau-card{padding:12px;border:1px solid #dbe2ea;border-radius:14px;background:#fff}.rau-badge{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:600;background:#dbeafe;color:#1d4ed8}.rau-list{display:flex;flex-direction:column;gap:10px}.rau-map-row{display:grid;grid-template-columns:1fr 140px 110px;gap:10px;align-items:center}.rau-table{display:flex;flex-direction:column;gap:8px}.rau-kv{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}.rau-inline-code{font:12px/1.4 Consolas,monospace;background:#eff6ff;padding:2px 6px;border-radius:8px}@media (max-width:768px){#rau-panel{left:10px;right:10px;top:10px;width:auto;max-height:calc(100vh - 20px)}#rau-launcher{right:12px;bottom:12px}.rau-map-row{grid-template-columns:1fr}.rau-grid{grid-template-columns:1fr}}`);
   }
-  function renderLauncher() { if (document.querySelector('#rau-launcher')) return; const button = document.createElement('button'); button.id = 'rau-launcher'; button.textContent = '简历自动填表'; button.addEventListener('click', openPanel); document.body.appendChild(button); }
-  function openPanel() { let panel = document.querySelector('#rau-panel'); if (!panel) { panel = document.createElement('aside'); panel.id = 'rau-panel'; document.body.appendChild(panel); } renderPanel(panel); }
+  function renderLauncher() {
+    if (!document.body || document.querySelector('#rau-launcher')) return;
+    const button = document.createElement('button');
+    button.id = 'rau-launcher';
+    button.textContent = '??????';
+    button.style.pointerEvents = 'auto';
+    button.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); safeCall('openPanel', openPanel); });
+    document.body.appendChild(button);
+  }
+  function openPanel() { let panel = document.querySelector('#rau-panel'); if (!panel) { panel = document.createElement('aside'); panel.id = 'rau-panel'; document.body.appendChild(panel); } try { renderPanel(panel); } catch (error) { showFallbackPanel(error, 'openPanel'); } }
   function closePanel() { const panel = document.querySelector('#rau-panel'); if (panel) panel.remove(); }
   function tabLabel(tab) { return { profiles: '简历', templates: '字段模板', autofill: '自动填写', mapping: '字段映射', rules: '站点规则', data: '数据', logs: '日志' }[tab] || tab; }
   function renderPanel(panel) {
