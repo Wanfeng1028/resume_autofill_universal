@@ -82,6 +82,8 @@
   observeDomChanges();
 
   let autoFilledPageKey = '';
+  let pendingImportFile = null;
+  let pendingImportFileName = '';
 
   function defaultState() {
     return { version: VERSION, profiles: [], activeProfileId: '', ui: { tab: 'profiles', busy: false }, logs: [], siteRules: {}, mappings: {}, lastScan: [], lastImportText: '' };
@@ -163,7 +165,7 @@
     setTimeout(mount, 2500);
   }
   function injectStyles() {
-    GM_addStyle(`#rau-launcher{position:fixed;right:20px;bottom:20px;z-index:2147483646;border:none;border-radius:999px;padding:12px 16px;background:linear-gradient(135deg,#0f766e,#0ea5e9);color:#fff;cursor:pointer;font:600 14px/1.2 "Segoe UI",sans-serif;box-shadow:0 16px 40px rgba(2,132,199,.35)}#rau-panel{position:fixed;top:18px;right:18px;width:470px;max-height:calc(100vh - 36px);overflow:auto;z-index:2147483647;background:#f8fafc;color:#0f172a;border:1px solid rgba(15,23,42,.1);border-radius:22px;box-shadow:0 28px 100px rgba(15,23,42,.28);font:14px/1.45 "Segoe UI",sans-serif}#rau-panel *{box-sizing:border-box}.rau-head{padding:18px;background:radial-gradient(circle at top left,#ecfeff,#f8fafc 58%)}.rau-row{display:flex;gap:10px;align-items:center}.rau-row+.rau-row{margin-top:10px}.rau-grow{flex:1}.rau-title{margin:0;font-size:18px;font-weight:700}.rau-sub{margin-top:4px;font-size:12px;color:#475569}.rau-section{padding:14px 18px;border-top:1px solid rgba(15,23,42,.08)}.rau-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.rau-tab{border:none;border-radius:999px;padding:8px 12px;background:#e2e8f0;color:#0f172a;cursor:pointer;font-weight:600}.rau-tab.is-active{background:#0f766e;color:#fff}.rau-input,.rau-select,.rau-textarea{width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:12px;background:#fff;color:#0f172a}.rau-textarea{min-height:86px;resize:vertical}.rau-btn{border:none;border-radius:12px;padding:10px 12px;cursor:pointer;font-weight:600}.rau-btn-primary{background:#0f766e;color:#fff}.rau-btn-secondary{background:#e2e8f0;color:#0f172a}.rau-btn-danger{background:#dc2626;color:#fff}.rau-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.rau-field{display:flex;flex-direction:column;gap:6px}.rau-small{font-size:12px;color:#475569}.rau-meta{font-size:12px;color:#64748b}.rau-log{background:#0f172a;color:#cbd5e1;padding:10px;border-radius:12px;font:12px/1.5 Consolas,monospace;white-space:pre-wrap;max-height:220px;overflow:auto}.rau-card{padding:12px;border:1px solid #dbe2ea;border-radius:14px;background:#fff}.rau-badge{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:600;background:#dbeafe;color:#1d4ed8}.rau-list{display:flex;flex-direction:column;gap:10px}.rau-map-row{display:grid;grid-template-columns:1fr 140px 110px;gap:10px;align-items:center}.rau-table{display:flex;flex-direction:column;gap:8px}.rau-kv{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}.rau-inline-code{font:12px/1.4 Consolas,monospace;background:#eff6ff;padding:2px 6px;border-radius:8px}@media (max-width:768px){#rau-panel{left:10px;right:10px;top:10px;width:auto;max-height:calc(100vh - 20px)}#rau-launcher{right:12px;bottom:12px}.rau-map-row{grid-template-columns:1fr}.rau-grid{grid-template-columns:1fr}}`);
+    GM_addStyle(`#rau-launcher{position:fixed;right:20px;bottom:20px;z-index:2147483646;border:none;border-radius:999px;padding:12px 16px;background:linear-gradient(135deg,#0f766e,#0ea5e9);color:#fff;cursor:pointer;font:600 14px/1.2 "Segoe UI",sans-serif;box-shadow:0 16px 40px rgba(2,132,199,.35)}#rau-panel{position:fixed;top:18px;right:18px;width:470px;max-height:calc(100vh - 36px);overflow:auto;z-index:2147483647;background:#f8fafc;color:#0f172a;border:1px solid rgba(15,23,42,.1);border-radius:22px;box-shadow:0 28px 100px rgba(15,23,42,.28);font:14px/1.45 "Segoe UI",sans-serif}#rau-panel *{box-sizing:border-box}.rau-head{padding:18px;background:radial-gradient(circle at top left,#ecfeff,#f8fafc 58%)}.rau-row{display:flex;gap:10px;align-items:center}.rau-row+.rau-row{margin-top:10px}.rau-grow{flex:1}.rau-title{margin:0;font-size:18px;font-weight:700}.rau-sub{margin-top:4px;font-size:12px;color:#475569}.rau-section{padding:14px 18px;border-top:1px solid rgba(15,23,42,.08)}.rau-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.rau-tab{border:none;border-radius:999px;padding:8px 12px;background:#e2e8f0;color:#0f172a;cursor:pointer;font-weight:600}.rau-tab.is-active{background:#0f766e;color:#fff}.rau-input,.rau-select,.rau-textarea{width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:12px;background:#fff;color:#0f172a}.rau-textarea{min-height:86px;resize:vertical}.rau-btn{border:none;border-radius:12px;padding:10px 12px;cursor:pointer;font-weight:600}.rau-btn-primary{background:#0f766e;color:#fff}.rau-btn-secondary{background:#e2e8f0;color:#0f172a}.rau-btn-danger{background:#dc2626;color:#fff}.rau-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.rau-field{display:flex;flex-direction:column;gap:6px}.rau-small{font-size:12px;color:#475569}.rau-meta{font-size:12px;color:#64748b}.rau-log{background:#0f172a;color:#cbd5e1;padding:10px;border-radius:12px;font:12px/1.5 Consolas,monospace;white-space:pre-wrap;max-height:220px;overflow:auto;overscroll-behavior:contain}.rau-card{padding:12px;border:1px solid #dbe2ea;border-radius:14px;background:#fff}.rau-badge{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:600;background:#dbeafe;color:#1d4ed8}.rau-list{display:flex;flex-direction:column;gap:10px}.rau-map-row{display:grid;grid-template-columns:1fr 140px 110px;gap:10px;align-items:center}.rau-table{display:flex;flex-direction:column;gap:8px}.rau-kv{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}.rau-inline-code{font:12px/1.4 Consolas,monospace;background:#eff6ff;padding:2px 6px;border-radius:8px}@media (max-width:768px){#rau-panel{left:10px;right:10px;top:10px;width:auto;max-height:calc(100vh - 20px)}#rau-launcher{right:12px;bottom:12px}.rau-map-row{grid-template-columns:1fr}.rau-grid{grid-template-columns:1fr}}`);
   }
   function renderLauncher() {
     if (!document.body || document.querySelector('#rau-launcher')) return;
@@ -198,7 +200,8 @@
     return `<div class="rau-field"><label class="rau-small">${escapeHtml(label)}</label><input class="rau-input" data-field="${key}" value="${escapeHtml(value)}"></div>`;
   }
   function renderProfilesTab(profile) {
-    return `<div class="rau-section"><div class="rau-row"><div class="rau-grow"><label class="rau-small">当前简历档案</label><select class="rau-select" id="rau-profile-select">${state.profiles.map((item) => `<option value="${escapeHtml(item.id)}"${item.id === profile.id ? ' selected' : ''}>${escapeHtml(item.name)}</option>`).join('')}</select></div><button class="rau-btn rau-btn-secondary" id="rau-new-profile">新建</button><button class="rau-btn rau-btn-danger" id="rau-delete-profile">删除</button></div><div class="rau-row"><div class="rau-grow"><label class="rau-small">档案名称</label><input class="rau-input" id="rau-profile-name" value="${escapeHtml(profile.name)}"></div></div><div class="rau-row"><input type="file" id="rau-file" class="rau-input rau-grow" accept=".pdf,.docx,.txt,.md,image/*,.png,.jpg,.jpeg,.webp,.json"><button class="rau-btn rau-btn-primary" id="rau-import">上传并解析</button></div><div class="rau-row"><button class="rau-btn rau-btn-secondary rau-grow" id="rau-export-profile">导出当前档案</button><button class="rau-btn rau-btn-secondary rau-grow" id="rau-import-json">导入 JSON 档案</button></div><div class="rau-meta">支持 PDF / DOCX / TXT / 图片 OCR。导入只保存在本地浏览器脚本存储中，不会写入公共脚本默认数据。</div></div><div class="rau-section"><div class="rau-grid">${FIELD_DEFS.map(([key, label]) => renderFieldEditor(key, label, profile.fields[key] || '')).join('')}</div></div>`;
+    const selectedFileText = pendingImportFileName ? `已选择文件: ${pendingImportFileName}` : '尚未选择任何文件。';
+    return `<div class="rau-section"><div class="rau-row"><div class="rau-grow"><label class="rau-small">当前简历档案</label><select class="rau-select" id="rau-profile-select">${state.profiles.map((item) => `<option value="${escapeHtml(item.id)}"${item.id === profile.id ? ' selected' : ''}>${escapeHtml(item.name)}</option>`).join('')}</select></div><button class="rau-btn rau-btn-secondary" id="rau-new-profile">新建</button><button class="rau-btn rau-btn-danger" id="rau-delete-profile">删除</button></div><div class="rau-row"><div class="rau-grow"><label class="rau-small">档案名称</label><input class="rau-input" id="rau-profile-name" value="${escapeHtml(profile.name)}"></div></div><div class="rau-row"><input type="file" id="rau-file" class="rau-input rau-grow" accept=".pdf,.docx,.txt,.md,image/*,.png,.jpg,.jpeg,.webp,.json"><button class="rau-btn rau-btn-primary" id="rau-import">上传并解析</button></div><div class="rau-meta">${escapeHtml(selectedFileText)}</div><div class="rau-row"><button class="rau-btn rau-btn-secondary rau-grow" id="rau-export-profile">导出当前档案</button><button class="rau-btn rau-btn-secondary rau-grow" id="rau-import-json">导入 JSON 档案</button></div><div class="rau-meta">支持 PDF / DOCX / TXT / 图片 OCR。导入只保存在本地浏览器脚本存储中，不会写入公共脚本默认数据。</div></div><div class="rau-section"><div class="rau-grid">${FIELD_DEFS.map(([key, label]) => renderFieldEditor(key, label, profile.fields[key] || '')).join('')}</div></div>`;
   }
   function renderTemplatesTab(profile) {
     const templates = ensureTemplates(profile);
@@ -240,10 +243,43 @@
       panel.querySelector('#rau-profile-name').addEventListener('change', (event) => { profile.name = event.target.value.trim() || profile.name; saveState(); });
       panel.querySelector('#rau-new-profile').addEventListener('click', () => { const id = createId(); state.profiles.unshift(makeProfile(id, `简历-${state.profiles.length + 1}`)); state.activeProfileId = id; saveState(); log('已新建简历档案。'); renderPanel(panel); });
       panel.querySelector('#rau-delete-profile').addEventListener('click', () => { if (state.profiles.length <= 1) { log('至少保留一个简历档案。'); return; } state.profiles = state.profiles.filter((item) => item.id !== profile.id); state.activeProfileId = state.profiles[0].id; saveState(); log('已删除当前简历档案。'); renderPanel(panel); });
-      panel.querySelector('#rau-import').addEventListener('click', async () => { const fileInput = panel.querySelector('#rau-file'); const file = fileInput.files && fileInput.files[0]; if (!file) { log('请选择要导入的文件。'); notify('请先选择要导入的简历文件。'); return; } state.ui.busy = true; saveState(); log(`开始导入文件: ${file.name}`); try { if (file.name.toLowerCase().endsWith('.json')) { await importProfileJson(file); } else { await importResumeFile(file, profile); saveFieldsFromPanel(panel, profile); } notify(`导入完成: ${file.name}`); } catch (error) { console.error(error); log(`导入失败: ${error.message}`); notify(`导入失败: ${error.message}`); } finally { state.ui.busy = false; saveState(); renderPanel(panel); } });
+      panel.querySelector('#rau-import').addEventListener('click', async () => {
+        const fileInput = panel.querySelector('#rau-file');
+        const file = pendingImportFile || (fileInput.files && fileInput.files[0]);
+        if (!file) { log('请选择要导入的文件。'); notify('请先选择要导入的简历文件。'); return; }
+        state.ui.busy = true;
+        saveState();
+        log(`开始导入文件: ${file.name}`);
+        try {
+          if (file.name.toLowerCase().endsWith('.json')) {
+            await importProfileJson(file);
+          } else {
+            await importResumeFile(file, profile);
+            saveFieldsFromPanel(panel, profile);
+          }
+          pendingImportFile = null;
+          pendingImportFileName = '';
+          notify(`导入完成: ${file.name}`);
+        } catch (error) {
+          console.error(error);
+          log(`导入失败: ${error.message}`);
+          notify(`导入失败: ${error.message}`);
+        } finally {
+          state.ui.busy = false;
+          saveState();
+          renderPanel(panel);
+        }
+      });
       panel.querySelector('#rau-export-profile').addEventListener('click', () => exportProfile(profile));
       panel.querySelector('#rau-import-json').addEventListener('click', () => panel.querySelector('#rau-file').click());
-      panel.querySelector('#rau-file').addEventListener('change', (event) => { const file = event.target.files && event.target.files[0]; if (file) log(`已选择文件: ${file.name}`); });
+      panel.querySelector('#rau-file').addEventListener('change', (event) => {
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+        pendingImportFile = file;
+        pendingImportFileName = file.name;
+        log(`已选择文件: ${file.name}`);
+        renderPanel(panel);
+      });
       panel.querySelectorAll('[data-field]').forEach((element) => element.addEventListener('change', () => saveFieldsFromPanel(panel, profile)));
     }
     if (state.ui.tab === 'templates') {
@@ -254,11 +290,12 @@
       panel.querySelectorAll('[data-template-field]').forEach((element) => element.addEventListener('change', () => saveTemplateCardsFromPanel(panel, profile)));
     }
     if (state.ui.tab === 'autofill') {
-      panel.querySelector('#rau-fill').addEventListener('click', () => { autofillActiveProfile({ overwrite: false }); renderPanel(panel); });
-      panel.querySelector('#rau-fill-mapped').addEventListener('click', () => { autofillActiveProfile({ overwrite: true, mappedOnly: true }); renderPanel(panel); });
-      panel.querySelector('#rau-fill-empty').addEventListener('click', () => { autofillActiveProfile({ overwrite: false, emptyOnly: true }); renderPanel(panel); });
-      panel.querySelector('#rau-fill-all').addEventListener('click', () => { autofillActiveProfile({ overwrite: true }); renderPanel(panel); });
-      panel.querySelector('#rau-scan').addEventListener('click', () => { state.lastScan = []; saveState(); log(`重新扫描完成，发现 ${scanPageFields().length} 个候选控件。`); renderPanel(panel); });
+      const runAutofill = (action, options) => safeCall(action, () => { const filled = autofillActiveProfile(options); renderPanel(panel); return filled; });
+      panel.querySelector('#rau-fill').addEventListener('click', () => runAutofill('autofillCurrentPage', { overwrite: false }));
+      panel.querySelector('#rau-fill-mapped').addEventListener('click', () => runAutofill('autofillMappedOnly', { overwrite: true, mappedOnly: true }));
+      panel.querySelector('#rau-fill-empty').addEventListener('click', () => runAutofill('autofillEmptyOnly', { overwrite: false, emptyOnly: true }));
+      panel.querySelector('#rau-fill-all').addEventListener('click', () => runAutofill('autofillOverwrite', { overwrite: true }));
+      panel.querySelector('#rau-scan').addEventListener('click', () => safeCall('rescanPage', () => { state.lastScan = []; saveState(); log(`重新扫描完成，发现 ${scanPageFields().length} 个候选控件。`); renderPanel(panel); }));
     }
     if (state.ui.tab === 'mapping') {
       panel.querySelector('#rau-auto-map').addEventListener('click', () => { autoGenerateMappings(scan); renderPanel(panel); });
@@ -274,6 +311,13 @@
       panel.querySelector('#rau-copy-json').addEventListener('click', async () => { try { await navigator.clipboard.writeText(JSON.stringify(profile, null, 2)); log('已复制当前档案 JSON。'); } catch { log('复制失败。'); } });
       panel.querySelector('#rau-reset-scan').addEventListener('click', () => { state.lastScan = []; saveState(); log('已清空最近扫描。'); renderPanel(panel); });
       panel.querySelector('#rau-reset-logs').addEventListener('click', () => { state.logs = []; saveState(); renderPanel(panel); });
+    }
+    if (state.ui.tab === 'logs') {
+      const logBox = panel.querySelector('#rau-log');
+      if (logBox) {
+        logBox.addEventListener('wheel', (event) => event.stopPropagation(), { passive: true });
+        logBox.addEventListener('touchmove', (event) => event.stopPropagation(), { passive: true });
+      }
     }
   }
   function ensureTemplates(profile) {
@@ -339,8 +383,10 @@
   async function importResumeFile(file, profile) {
     log(`开始解析文件: ${file.name}`);
     const text = await extractTextFromFile(file);
-    if (!text.trim()) { log('未提取到文本，请尝试更清晰的 PDF 或图片。'); return; }
+    log(`文本提取完成，长度 ${text.trim().length} 字符。`);
+    if (!text.trim()) { log('未提取到文本，请尝试更清晰的 PDF 或图片。'); notify('未提取到简历文本，请尝试更清晰的 PDF、DOCX 或图片。'); return; }
     const parsed = parseResumeText(text);
+    if (!parsed.fields.custom) parsed.fields.custom = text.slice(0, 8000);
     profile.fileName = file.name; profile.importedAt = new Date().toISOString(); profile.sourceText = text.slice(0, 120000); profile.fields = Object.assign({}, profile.fields, parsed.fields);
     state.lastImportText = text.slice(0, 6000); saveState(); log(`解析完成: ${parsed.hits.length ? parsed.hits.join('、') : '未命中显式字段，已保留原文供手动修正'}`);
   }
@@ -488,7 +534,7 @@
   function describeAutofillTargets(profile, scan) { const mapped = scan.map((item) => inferFieldKey(item)).filter(Boolean); const uniqueMapped = Array.from(new Set(mapped)); const ready = uniqueMapped.filter((key) => profile.fields[key]); return `发现 ${scan.length} 个候选控件，可识别 ${uniqueMapped.length} 类字段，当前简历可直接填充 ${ready.length} 类。`; }
   function autofillActiveProfile(options) {
     const config = Object.assign({ overwrite: false, mappedOnly: false, emptyOnly: false }, options || {});
-    if (!getCurrentSiteRule().enabled) { log('本站规则已禁用，跳过自动填写。'); return; }
+    if (!getCurrentSiteRule().enabled) { log('本站规则已禁用，跳过自动填写。'); return 0; }
     const profile = getActiveProfile();
     const scan = scanPageFields();
     let filled = 0;
@@ -521,7 +567,8 @@
       if (applyValueToField(candidate.element, value, fieldKey)) filled += 1;
     });
     log(`自动填写完成，命中 ${filled} 个字段。`);
-    if (!filled) notify('未匹配到可填写字段，请打开映射页补充站点字段映射。');
+    notify(filled ? `自动填写完成，命中 ${filled} 个字段。` : '未匹配到可填写字段，请打开映射页补充站点字段映射。');
+    return filled;
   }
   function hasUserValue(element) { if (element.matches('select')) return !!element.value; if (element.matches('input,textarea')) return !!String(element.value || '').trim(); if (element.matches('[contenteditable="true"]')) return !!String(element.textContent || '').trim(); return false; }
   function applyValueToField(element, rawValue, fieldKey) {
@@ -565,7 +612,7 @@
   function exportStateToFile() { downloadFile('resume-autofill-universal-data.json', JSON.stringify(state, null, 2), 'application/json'); log('已导出全部数据。'); }
   function downloadFile(name, content, type) { const blob = new Blob([content], { type: type || 'text/plain;charset=utf-8' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
   function maybeAutoFillOnOpen() { const rule = getCurrentSiteRule(); const pageKey = `${location.href}|${document.title}`; if (!rule.autoFillOnOpen || autoFilledPageKey === pageKey) return; autoFilledPageKey = pageKey; setTimeout(() => safeCall('自动打开后填充', () => autofillActiveProfile({ overwrite: false })), 1200); }
-  function observeDomChanges() { let timer = null; const observer = new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(() => { const panel = document.querySelector('#rau-panel'); const activeInsidePanel = panel && panel.contains(document.activeElement); const editingProfiles = state.ui && state.ui.tab === 'profiles'; if (panel && getCurrentSiteRule().autoScan && !state.ui.busy && !(editingProfiles && activeInsidePanel)) renderPanel(panel); maybeAutoFillOnOpen(); }, 600); }); observer.observe(document.documentElement, { childList: true, subtree: true }); maybeAutoFillOnOpen(); }
+  function observeDomChanges() { let timer = null; const observer = new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(() => { const panel = document.querySelector('#rau-panel'); if (panel) return; maybeAutoFillOnOpen(); }, 600); }); observer.observe(document.documentElement, { childList: true, subtree: true }); maybeAutoFillOnOpen(); }
   function createId() { return `resume-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; }
   function cssEscape(value) { return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"'); }
   function escapeHtml(value) { return String(value == null ? '' : value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;'); }
