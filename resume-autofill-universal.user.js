@@ -255,7 +255,6 @@
             await importProfileJson(file);
           } else {
             await importResumeFile(file, profile);
-            saveFieldsFromPanel(panel, profile);
           }
           pendingImportFile = null;
           pendingImportFileName = '';
