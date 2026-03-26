@@ -119,9 +119,9 @@
   function log(message) { state.logs.push(`${new Date().toLocaleTimeString()} ${message}`); state.logs = state.logs.slice(-80); saveState(); const box = document.querySelector('#rau-log'); if (box) box.textContent = state.logs.join('\n'); }
   function notify(text) { if (typeof GM_notification === 'function') GM_notification({ title: '简历自动填表', text, timeout: 3500 }); }
   function registerMenu() {
-    GM_registerMenuCommand('??????????', () => safeCall('openPanel', openPanel));
-    GM_registerMenuCommand('??????', () => safeCall('autofill', () => autofillActiveProfile({})));
-    GM_registerMenuCommand('??????', () => safeCall('export', exportStateToFile));
+    GM_registerMenuCommand('打开简历自动填表面板', () => safeCall('openPanel', openPanel));
+    GM_registerMenuCommand('执行自动填写', () => safeCall('autofill', () => autofillActiveProfile({})));
+    GM_registerMenuCommand('导出全部数据', () => safeCall('export', exportStateToFile));
   }
   function safeCall(action, fn) {
     try { return fn(); } catch (error) {
@@ -138,7 +138,7 @@
       document.body.appendChild(panel);
     }
     const msg = (error && error.message) ? error.message : String(error || 'Unknown error');
-    panel.innerHTML = `<div style="padding:16px;font:14px/1.5 Segoe UI,sans-serif;background:#fff;border:1px solid #ddd;border-radius:12px"><h3 style="margin:0 0 10px">????????</h3><div style="font-size:12px;color:#333;white-space:pre-wrap">Action: ${action}\n${msg}</div><div style="margin-top:12px;display:flex;gap:8px"><button id="rau-retry" style="padding:8px 12px;border:none;border-radius:8px;background:#0f766e;color:#fff;cursor:pointer">????</button><button id="rau-reset" style="padding:8px 12px;border:none;border-radius:8px;background:#dc2626;color:#fff;cursor:pointer">??????</button><button id="rau-close-fallback" style="padding:8px 12px;border:none;border-radius:8px;background:#e2e8f0;color:#111;cursor:pointer">??</button></div></div>`;
+    panel.innerHTML = `<div style="padding:16px;font:14px/1.5 Segoe UI,sans-serif;background:#fff;border:1px solid #ddd;border-radius:12px"><h3 style="margin:0 0 10px">简历自动填表异常</h3><div style="font-size:12px;color:#333;white-space:pre-wrap">Action: ${action}\n${msg}</div><div style="margin-top:12px;display:flex;gap:8px"><button id="rau-retry" style="padding:8px 12px;border:none;border-radius:8px;background:#0f766e;color:#fff;cursor:pointer">重试</button><button id="rau-reset" style="padding:8px 12px;border:none;border-radius:8px;background:#dc2626;color:#fff;cursor:pointer">重置数据</button><button id="rau-close-fallback" style="padding:8px 12px;border:none;border-radius:8px;background:#e2e8f0;color:#111;cursor:pointer">关闭</button></div></div>`;
     const retry = panel.querySelector('#rau-retry');
     const reset = panel.querySelector('#rau-reset');
     const close = panel.querySelector('#rau-close-fallback');
@@ -167,7 +167,7 @@
     if (!document.body || document.querySelector('#rau-launcher')) return;
     const button = document.createElement('button');
     button.id = 'rau-launcher';
-    button.textContent = '??????';
+    button.textContent = '简历自动填表';
     button.style.pointerEvents = 'auto';
     button.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); safeCall('openPanel', openPanel); });
     document.body.appendChild(button);
@@ -200,18 +200,18 @@
   }
   function renderTemplatesTab(profile) {
     const templates = ensureTemplates(profile);
-    return `<div class="rau-section"><div class="rau-row"><button class="rau-btn rau-btn-secondary rau-grow" id="rau-template-sync">????????????</button><button class="rau-btn rau-btn-secondary rau-grow" id="rau-template-demo">??????</button></div><div class="rau-meta">???????????????????????????????????????????</div></div><div class="rau-section rau-list">${renderTemplateSection('educations', '????', templates.educations, ['school','major','degree','start','end','description'])}${renderTemplateSection('projects', '????', templates.projects, ['name','role','start','end','stack','description','highlights'])}${renderTemplateSection('internships', '????', templates.internships, ['company','role','start','end','description','highlights'])}${renderTemplateSection('awards', '??', templates.awards, ['name','date','description'])}${renderTemplateSection('certificates', '??', templates.certificates, ['name','date','score','description'])}${renderTemplateSection('customQuestions', '?????', templates.customQuestions, ['question','keywords','priority','answer'])}</div>`;
+    return `<div class="rau-section"><div class="rau-row"><button class="rau-btn rau-btn-secondary rau-grow" id="rau-template-sync">同步结构化模板</button><button class="rau-btn rau-btn-secondary rau-grow" id="rau-template-demo">填充示例模板</button></div><div class="rau-meta">这里维护教育经历、项目经历、实习经历、奖项、证书和自定义问答。同步后会自动写回普通文本字段，方便通用站点表单填写。</div></div><div class="rau-section rau-list">${renderTemplateSection('educations', '教育经历', templates.educations, ['school','major','degree','start','end','description'])}${renderTemplateSection('projects', '项目经历', templates.projects, ['name','role','start','end','stack','description','highlights'])}${renderTemplateSection('internships', '实习经历', templates.internships, ['company','role','start','end','description','highlights'])}${renderTemplateSection('awards', '奖项', templates.awards, ['name','date','description'])}${renderTemplateSection('certificates', '证书', templates.certificates, ['name','date','score','description'])}${renderTemplateSection('customQuestions', '自定义问答', templates.customQuestions, ['question','keywords','priority','answer'])}</div>`;
   }
   function renderTemplateSection(type, label, items, fields) {
-    return `<div class="rau-card"><div class="rau-row"><div class="rau-grow"><strong>${escapeHtml(label)}</strong><div class="rau-small">${escapeHtml(type)}</div></div><button class="rau-btn rau-btn-secondary" data-template-add="${type}">??</button></div><div class="rau-list">${(items || []).map((item, index) => renderTemplateCard(type, label, item, index, fields)).join('') || `<div class="rau-small">????</div>`}</div></div>`;
+    return `<div class="rau-card"><div class="rau-row"><div class="rau-grow"><strong>${escapeHtml(label)}</strong><div class="rau-small">${escapeHtml(type)}</div></div><button class="rau-btn rau-btn-secondary" data-template-add="${type}">新增</button></div><div class="rau-list">${(items || []).map((item, index) => renderTemplateCard(type, label, item, index, fields)).join('') || `<div class="rau-small">暂无条目</div>`}</div></div>`;
   }
   function renderTemplateCard(type, label, item, index, fields) {
-    return `<div class="rau-card"><div class="rau-row"><strong>${escapeHtml(label)} #${index + 1}</strong><button class="rau-btn rau-btn-danger" data-template-remove="${type}" data-template-index="${index}">??</button></div><div class="rau-grid">${fields.map((field) => renderTemplateInput(type, index, field, item && item[field] != null ? item[field] : '')).join('')}</div></div>`;
+    return `<div class="rau-card"><div class="rau-row"><strong>${escapeHtml(label)} #${index + 1}</strong><button class="rau-btn rau-btn-danger" data-template-remove="${type}" data-template-index="${index}">删除</button></div><div class="rau-grid">${fields.map((field) => renderTemplateInput(type, index, field, item && item[field] != null ? item[field] : '')).join('')}</div></div>`;
   }
   function renderTemplateInput(type, index, field, value) {
     const stringValue = Array.isArray(value) ? value.join('\n') : String(value || '');
     const longField = ['description', 'answer', 'highlights', 'keywords'].includes(field);
-    const title = ({ school: '??', major: '??', degree: '??/??', start: '????', end: '????', description: '??', name: '??', role: '??/??', stack: '???', company: '??', date: '??', score: '??/??', question: '??', keywords: '???', priority: '???', answer: '??', highlights: '??' })[field] || field;
+    const title = ({ school: '学校', major: '专业', degree: '学历/学位', start: '开始时间', end: '结束时间', description: '描述', name: '名称', role: '角色/岗位', stack: '技术栈', company: '公司', date: '日期', score: '分数/等级', question: '问题', keywords: '关键词', priority: '优先级', answer: '答案', highlights: '亮点' })[field] || field;
     if (longField) return `<div class="rau-field" style="grid-column:1 / -1"><label class="rau-small">${escapeHtml(title)}</label><textarea class="rau-textarea" data-template-field="${type}" data-template-index="${index}" data-template-key="${field}">${escapeHtml(stringValue)}</textarea></div>`;
     return `<div class="rau-field"><label class="rau-small">${escapeHtml(title)}</label><input class="rau-input" data-template-field="${type}" data-template-index="${index}" data-template-key="${field}" value="${escapeHtml(stringValue)}"></div>`;
   }
@@ -244,7 +244,7 @@
       panel.querySelectorAll('[data-field]').forEach((element) => element.addEventListener('change', () => saveFieldsFromPanel(panel, profile)));
     }
     if (state.ui.tab === 'templates') {
-      panel.querySelector('#rau-template-sync').addEventListener('click', () => { saveTemplateCardsFromPanel(panel, profile); syncTemplatesToFields(profile); log('?????????????'); renderPanel(panel); });
+      panel.querySelector('#rau-template-sync').addEventListener('click', () => { saveTemplateCardsFromPanel(panel, profile); syncTemplatesToFields(profile); log('已同步结构化模板到文本字段。'); renderPanel(panel); });
       panel.querySelector('#rau-template-demo').addEventListener('click', () => { profile.templates = sampleTemplates(); saveState(); renderPanel(panel); });
       panel.querySelectorAll('[data-template-add]').forEach((button) => button.addEventListener('click', () => { const templates = ensureTemplates(profile); const type = button.dataset.templateAdd; templates[type].push(createTemplateItem(type)); saveState(); renderPanel(panel); }));
       panel.querySelectorAll('[data-template-remove]').forEach((button) => button.addEventListener('click', () => { const templates = ensureTemplates(profile); const type = button.dataset.templateRemove; const index = Number(button.dataset.templateIndex); templates[type].splice(index, 1); saveState(); renderPanel(panel); }));
@@ -280,12 +280,12 @@
   }
   function sampleTemplates() {
     return {
-      educations: [{ school: '????', major: '????', degree: '??/??', start: '2021-09', end: '2025-06', description: '??????????' }],
-      projects: [{ name: '????', role: '????', start: '2024-03', end: '2024-06', description: '????', highlights: ['??????', '??????'], stack: 'React / Node.js / GIS' }],
-      internships: [{ company: '????', role: '????', start: '2024-07', end: '2024-09', description: '????', highlights: ['??????', '??????'] }],
-      awards: [{ name: '????', date: '2024-10', description: '???????' }],
-      certificates: [{ name: '????', date: '2024-01', score: '??', description: '????' }],
-      customQuestions: [{ question: '????????', keywords: ['???????', 'why us'], priority: 100, answer: '?????????' }]
+      educations: [{ school: '学校名称', major: '专业名称', degree: '本科/硕士', start: '2021-09', end: '2025-06', description: '主修课程、成绩、荣誉' }],
+      projects: [{ name: '项目名称', role: '负责角色', start: '2024-03', end: '2024-06', description: '项目背景', highlights: ['负责核心模块', '完成关键优化'], stack: 'React / Node.js / GIS' }],
+      internships: [{ company: '公司名称', role: '岗位名称', start: '2024-07', end: '2024-09', description: '实习内容', highlights: ['完成业务需求', '推动性能优化'] }],
+      awards: [{ name: '奖项名称', date: '2024-10', description: '竞赛或荣誉说明' }],
+      certificates: [{ name: '证书名称', date: '2024-01', score: '可选', description: '证书说明' }],
+      customQuestions: [{ question: '为什么选择我们？', keywords: ['为什么选择我们', 'why us'], priority: 100, answer: '这里填写你的标准回答模板。' }]
     };
   }
   function createTemplateItem(type) {
@@ -300,7 +300,7 @@
   function syncTemplatesToFields(profile) {
     const t = ensureTemplates(profile);
     profile.fields.educationDetail = t.educations.map((item) => `${item.start || ''} - ${item.end || ''} ${item.school || ''} ${item.major || ''} ${item.degree || ''}\n${item.description || ''}`.trim()).filter(Boolean).join('\n\n');
-    profile.fields.project = t.projects.map((item) => `${item.start || ''} - ${item.end || ''} ${item.name || ''} ${item.role || ''}\n${item.description || ''}${item.highlights && item.highlights.length ? `\n${item.highlights.map((x) => `- ${x}`).join('\n')}` : ''}${item.stack ? `\n???: ${item.stack}` : ''}`.trim()).filter(Boolean).join('\n\n');
+    profile.fields.project = t.projects.map((item) => `${item.start || ''} - ${item.end || ''} ${item.name || ''} ${item.role || ''}\n${item.description || ''}${item.highlights && item.highlights.length ? `\n${item.highlights.map((x) => `- ${x}`).join('\n')}` : ''}${item.stack ? `\n技术栈: ${item.stack}` : ''}`.trim()).filter(Boolean).join('\n\n');
     profile.fields.internship = t.internships.map((item) => `${item.start || ''} - ${item.end || ''} ${item.company || ''} ${item.role || ''}\n${item.description || ''}${item.highlights && item.highlights.length ? `\n${item.highlights.map((x) => `- ${x}`).join('\n')}` : ''}`.trim()).filter(Boolean).join('\n\n');
     profile.fields.award = t.awards.map((item) => `${item.date || ''} ${item.name || ''} ${item.description || ''}`.trim()).filter(Boolean).join('\n');
     profile.fields.certificate = t.certificates.map((item) => `${item.date || ''} ${item.name || ''} ${item.score || ''} ${item.description || ''}`.trim()).filter(Boolean).join('\n');
@@ -390,10 +390,10 @@
     const questions = (templates.customQuestions || []).slice().sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0));
     const normalized = String(meta || '').toLowerCase();
     const canned = [
-      ['why us', ['why us', 'choose us', 'join us', 'company reason', '?????', '?????']],
-      ['strength', ['strength', '??', '??']],
-      ['weakness', ['weakness', '??', '??']],
-      ['career plan', ['career plan', '????', '????', '????']]
+      ['why us', ['why us', 'choose us', 'join us', 'company reason', '为什么选择', '为什么加入']],
+      ['strength', ['strength', '优点', '优势']],
+      ['weakness', ['weakness', '缺点', '不足']],
+      ['career plan', ['career plan', '职业规划', '未来规划', '未来三年']]
     ];
     for (const item of questions) {
       const question = String(item.question || '').toLowerCase().trim();
@@ -485,7 +485,7 @@
   function describeAutofillTargets(profile, scan) { const mapped = scan.map((item) => inferFieldKey(item)).filter(Boolean); const uniqueMapped = Array.from(new Set(mapped)); const ready = uniqueMapped.filter((key) => profile.fields[key]); return `发现 ${scan.length} 个候选控件，可识别 ${uniqueMapped.length} 类字段，当前简历可直接填充 ${ready.length} 类。`; }
   function autofillActiveProfile(options) {
     const config = Object.assign({ overwrite: false, mappedOnly: false, emptyOnly: false }, options || {});
-    if (!getCurrentSiteRule().enabled) { log('???????????????'); return; }
+    if (!getCurrentSiteRule().enabled) { log('本站规则已禁用，跳过自动填写。'); return; }
     const profile = getActiveProfile();
     const scan = scanPageFields();
     let filled = 0;
@@ -517,8 +517,8 @@
       if (!value) return;
       if (applyValueToField(candidate.element, value, fieldKey)) filled += 1;
     });
-    log(`????????? ${filled} ????`);
-    if (!filled) notify('?????????????????????????');
+    log(`自动填写完成，命中 ${filled} 个字段。`);
+    if (!filled) notify('未匹配到可填写字段，请打开映射页补充站点字段映射。');
   }
   function hasUserValue(element) { if (element.matches('select')) return !!element.value; if (element.matches('input,textarea')) return !!String(element.value || '').trim(); if (element.matches('[contenteditable="true"]')) return !!String(element.textContent || '').trim(); return false; }
   function applyValueToField(element, rawValue, fieldKey) {
@@ -561,7 +561,7 @@
   function exportProfile(profile) { downloadFile(`${profile.name || 'resume-profile'}.json`, JSON.stringify(profile, null, 2), 'application/json'); log(`已导出档案: ${profile.name}`); }
   function exportStateToFile() { downloadFile('resume-autofill-universal-data.json', JSON.stringify(state, null, 2), 'application/json'); log('已导出全部数据。'); }
   function downloadFile(name, content, type) { const blob = new Blob([content], { type: type || 'text/plain;charset=utf-8' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
-  function maybeAutoFillOnOpen() { const rule = getCurrentSiteRule(); const pageKey = `${location.href}|${document.title}`; if (!rule.autoFillOnOpen || autoFilledPageKey === pageKey) return; autoFilledPageKey = pageKey; setTimeout(() => safeRun('????????', () => autofillActiveProfile({ overwrite: false })), 1200); }
+  function maybeAutoFillOnOpen() { const rule = getCurrentSiteRule(); const pageKey = `${location.href}|${document.title}`; if (!rule.autoFillOnOpen || autoFilledPageKey === pageKey) return; autoFilledPageKey = pageKey; setTimeout(() => safeCall('自动打开后填充', () => autofillActiveProfile({ overwrite: false })), 1200); }
   function observeDomChanges() { let timer = null; const observer = new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(() => { const panel = document.querySelector('#rau-panel'); if (panel && getCurrentSiteRule().autoScan) renderPanel(panel); maybeAutoFillOnOpen(); }, 600); }); observer.observe(document.documentElement, { childList: true, subtree: true }); maybeAutoFillOnOpen(); }
   function createId() { return `resume-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; }
   function cssEscape(value) { return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"'); }
