@@ -79,7 +79,6 @@
   injectStyles();
   renderLauncherWhenReady();
   registerMenu();
-  registerHotkeys();
   observeDomChanges();
 
   let autoFilledPageKey = '';
