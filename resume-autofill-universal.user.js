@@ -79,7 +79,10 @@
   injectStyles();
   renderLauncher();
   registerMenu();
+  registerHotkeys();
   observeDomChanges();
+
+  let autoFilledPageKey = '';
 
   function defaultState() {
     return { version: VERSION, profiles: [], activeProfileId: '', ui: { tab: 'profiles' }, logs: [], siteRules: {}, mappings: {}, lastScan: [], lastImportText: '' };
@@ -104,7 +107,7 @@
   function getActiveProfile() { return state.profiles.find((p) => p.id === state.activeProfileId) || state.profiles[0]; }
   function getSiteKey() { return location.hostname.replace(/^www\./, ''); }
   function getSiteMappings() { const key = getSiteKey(); if (!state.mappings[key]) state.mappings[key] = {}; return state.mappings[key]; }
-  function getCurrentSiteRule() { const key = getSiteKey(); if (!state.siteRules[key]) state.siteRules[key] = { enabled: true, autoScan: true, preferredSelectors: '', ignoreSelectors: '', notes: '' }; return state.siteRules[key]; }
+  function getCurrentSiteRule() { const key = getSiteKey(); if (!state.siteRules[key]) state.siteRules[key] = { enabled: true, autoScan: true, autoFillOnOpen: false, hotkeyEnabled: true, preferredSelectors: '', ignoreSelectors: '', notes: '' }; return state.siteRules[key]; }
   const SITE_ADAPTERS = {
     nowcoder: { hosts: ['nowcoder.com'], selectors: ['.nc-form input', '.nc-form textarea', '.nc-form select'], aliases: { project: ['project'], internship: ['internship'], educationDetail: ['education'] } },
     boss: { hosts: ['zhipin.com'], selectors: ['.boss-form input', '.boss-form textarea', '.boss-form select'], aliases: { expectedJob: ['job'], selfIntro: ['advantage'], custom: ['extra'] } },
@@ -510,7 +513,8 @@
   function exportProfile(profile) { downloadFile(`${profile.name || 'resume-profile'}.json`, JSON.stringify(profile, null, 2), 'application/json'); log(`已导出档案: ${profile.name}`); }
   function exportStateToFile() { downloadFile('resume-autofill-universal-data.json', JSON.stringify(state, null, 2), 'application/json'); log('已导出全部数据。'); }
   function downloadFile(name, content, type) { const blob = new Blob([content], { type: type || 'text/plain;charset=utf-8' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
-  function observeDomChanges() { let timer = null; const observer = new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(() => { const panel = document.querySelector('#rau-panel'); if (panel && getCurrentSiteRule().autoScan) renderPanel(panel); }, 600); }); observer.observe(document.documentElement, { childList: true, subtree: true }); }
+  function maybeAutoFillOnOpen() { const rule = getCurrentSiteRule(); const pageKey = `${location.href}|${document.title}`; if (!rule.autoFillOnOpen || autoFilledPageKey === pageKey) return; autoFilledPageKey = pageKey; setTimeout(() => autofillActiveProfile({ overwrite: false }), 1200); }
+  function observeDomChanges() { let timer = null; const observer = new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(() => { const panel = document.querySelector('#rau-panel'); if (panel && getCurrentSiteRule().autoScan) renderPanel(panel); maybeAutoFillOnOpen(); }, 600); }); observer.observe(document.documentElement, { childList: true, subtree: true }); maybeAutoFillOnOpen(); }
   function createId() { return `resume-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; }
   function cssEscape(value) { return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"'); }
   function escapeHtml(value) { return String(value == null ? '' : value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;'); }
