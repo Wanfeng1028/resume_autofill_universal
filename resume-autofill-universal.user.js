@@ -77,7 +77,7 @@
   const state = loadState();
   ensureStateShape();
   injectStyles();
-  onReady(renderLauncher);
+  renderLauncherWhenReady();
   registerMenu();
   registerHotkeys();
   observeDomChanges();
@@ -120,6 +120,20 @@
   function log(message) { state.logs.push(`${new Date().toLocaleTimeString()} ${message}`); state.logs = state.logs.slice(-80); saveState(); const box = document.querySelector('#rau-log'); if (box) box.textContent = state.logs.join('\n'); }
   function notify(text) { if (typeof GM_notification === 'function') GM_notification({ title: '简历自动填表', text, timeout: 3500 }); }
   function registerMenu() { GM_registerMenuCommand('打开简历自动填表面板', openPanel); GM_registerMenuCommand('执行自动填写', () => autofillActiveProfile({})); GM_registerMenuCommand('导出全部数据', exportStateToFile); }
+  function renderLauncherWhenReady() {
+    const mount = () => {
+      try { renderLauncher(); } catch (error) { console.error('[Resume Autofill Universal] renderLauncher failed', error); }
+    };
+    mount();
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', mount, { once: true });
+      window.addEventListener('load', mount, { once: true });
+    } else {
+      setTimeout(mount, 300);
+    }
+    setTimeout(mount, 1000);
+    setTimeout(mount, 2500);
+  }
   function injectStyles() {
     GM_addStyle(`#rau-launcher{position:fixed;right:20px;bottom:20px;z-index:2147483646;border:none;border-radius:999px;padding:12px 16px;background:linear-gradient(135deg,#0f766e,#0ea5e9);color:#fff;cursor:pointer;font:600 14px/1.2 "Segoe UI",sans-serif;box-shadow:0 16px 40px rgba(2,132,199,.35)}#rau-panel{position:fixed;top:18px;right:18px;width:470px;max-height:calc(100vh - 36px);overflow:auto;z-index:2147483647;background:#f8fafc;color:#0f172a;border:1px solid rgba(15,23,42,.1);border-radius:22px;box-shadow:0 28px 100px rgba(15,23,42,.28);font:14px/1.45 "Segoe UI",sans-serif}#rau-panel *{box-sizing:border-box}.rau-head{padding:18px;background:radial-gradient(circle at top left,#ecfeff,#f8fafc 58%)}.rau-row{display:flex;gap:10px;align-items:center}.rau-row+.rau-row{margin-top:10px}.rau-grow{flex:1}.rau-title{margin:0;font-size:18px;font-weight:700}.rau-sub{margin-top:4px;font-size:12px;color:#475569}.rau-section{padding:14px 18px;border-top:1px solid rgba(15,23,42,.08)}.rau-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.rau-tab{border:none;border-radius:999px;padding:8px 12px;background:#e2e8f0;color:#0f172a;cursor:pointer;font-weight:600}.rau-tab.is-active{background:#0f766e;color:#fff}.rau-input,.rau-select,.rau-textarea{width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:12px;background:#fff;color:#0f172a}.rau-textarea{min-height:86px;resize:vertical}.rau-btn{border:none;border-radius:12px;padding:10px 12px;cursor:pointer;font-weight:600}.rau-btn-primary{background:#0f766e;color:#fff}.rau-btn-secondary{background:#e2e8f0;color:#0f172a}.rau-btn-danger{background:#dc2626;color:#fff}.rau-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.rau-field{display:flex;flex-direction:column;gap:6px}.rau-small{font-size:12px;color:#475569}.rau-meta{font-size:12px;color:#64748b}.rau-log{background:#0f172a;color:#cbd5e1;padding:10px;border-radius:12px;font:12px/1.5 Consolas,monospace;white-space:pre-wrap;max-height:220px;overflow:auto}.rau-card{padding:12px;border:1px solid #dbe2ea;border-radius:14px;background:#fff}.rau-badge{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:600;background:#dbeafe;color:#1d4ed8}.rau-list{display:flex;flex-direction:column;gap:10px}.rau-map-row{display:grid;grid-template-columns:1fr 140px 110px;gap:10px;align-items:center}.rau-table{display:flex;flex-direction:column;gap:8px}.rau-kv{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}.rau-inline-code{font:12px/1.4 Consolas,monospace;background:#eff6ff;padding:2px 6px;border-radius:8px}@media (max-width:768px){#rau-panel{left:10px;right:10px;top:10px;width:auto;max-height:calc(100vh - 20px)}#rau-launcher{right:12px;bottom:12px}.rau-map-row{grid-template-columns:1fr}.rau-grid{grid-template-columns:1fr}}`);
   }
