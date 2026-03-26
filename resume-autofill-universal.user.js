@@ -84,7 +84,7 @@
   let autoFilledPageKey = '';
 
   function defaultState() {
-    return { version: VERSION, profiles: [], activeProfileId: '', ui: { tab: 'profiles' }, logs: [], siteRules: {}, mappings: {}, lastScan: [], lastImportText: '' };
+    return { version: VERSION, profiles: [], activeProfileId: '', ui: { tab: 'profiles', busy: false }, logs: [], siteRules: {}, mappings: {}, lastScan: [], lastImportText: '' };
   }
   function loadState() {
     const raw = GM_getValue(STORAGE_KEY, '');
@@ -100,7 +100,9 @@
     state.lastScan = Array.isArray(state.lastScan) ? state.lastScan : [];
     if (!state.profiles || !state.profiles.length) { const id = createId(); state.profiles = [makeProfile(id, '默认简历')]; state.activeProfileId = id; }
     if (!state.activeProfileId || !state.profiles.some((p) => p.id === state.activeProfileId)) state.activeProfileId = state.profiles[0].id;
+    if (!state.ui || typeof state.ui !== 'object') state.ui = { tab: 'profiles', busy: false };
     if (!TABS.includes(state.ui.tab)) state.ui.tab = 'profiles';
+    if (typeof state.ui.busy !== 'boolean') state.ui.busy = false;
     saveState();
   }
   function getActiveProfile() { return state.profiles.find((p) => p.id === state.activeProfileId) || state.profiles[0]; }
@@ -238,9 +240,10 @@
       panel.querySelector('#rau-profile-name').addEventListener('change', (event) => { profile.name = event.target.value.trim() || profile.name; saveState(); });
       panel.querySelector('#rau-new-profile').addEventListener('click', () => { const id = createId(); state.profiles.unshift(makeProfile(id, `简历-${state.profiles.length + 1}`)); state.activeProfileId = id; saveState(); log('已新建简历档案。'); renderPanel(panel); });
       panel.querySelector('#rau-delete-profile').addEventListener('click', () => { if (state.profiles.length <= 1) { log('至少保留一个简历档案。'); return; } state.profiles = state.profiles.filter((item) => item.id !== profile.id); state.activeProfileId = state.profiles[0].id; saveState(); log('已删除当前简历档案。'); renderPanel(panel); });
-      panel.querySelector('#rau-import').addEventListener('click', async () => { const fileInput = panel.querySelector('#rau-file'); const file = fileInput.files && fileInput.files[0]; if (!file) { log('请选择要导入的文件。'); return; } if (file.name.toLowerCase().endsWith('.json')) { await importProfileJson(file); renderPanel(panel); return; } await importResumeFile(file, profile); saveFieldsFromPanel(panel, profile); renderPanel(panel); });
+      panel.querySelector('#rau-import').addEventListener('click', async () => { const fileInput = panel.querySelector('#rau-file'); const file = fileInput.files && fileInput.files[0]; if (!file) { log('请选择要导入的文件。'); notify('请先选择要导入的简历文件。'); return; } state.ui.busy = true; saveState(); log(`开始导入文件: ${file.name}`); try { if (file.name.toLowerCase().endsWith('.json')) { await importProfileJson(file); } else { await importResumeFile(file, profile); saveFieldsFromPanel(panel, profile); } notify(`导入完成: ${file.name}`); } catch (error) { console.error(error); log(`导入失败: ${error.message}`); notify(`导入失败: ${error.message}`); } finally { state.ui.busy = false; saveState(); renderPanel(panel); } });
       panel.querySelector('#rau-export-profile').addEventListener('click', () => exportProfile(profile));
       panel.querySelector('#rau-import-json').addEventListener('click', () => panel.querySelector('#rau-file').click());
+      panel.querySelector('#rau-file').addEventListener('change', (event) => { const file = event.target.files && event.target.files[0]; if (file) log(`已选择文件: ${file.name}`); });
       panel.querySelectorAll('[data-field]').forEach((element) => element.addEventListener('change', () => saveFieldsFromPanel(panel, profile)));
     }
     if (state.ui.tab === 'templates') {
@@ -562,7 +565,7 @@
   function exportStateToFile() { downloadFile('resume-autofill-universal-data.json', JSON.stringify(state, null, 2), 'application/json'); log('已导出全部数据。'); }
   function downloadFile(name, content, type) { const blob = new Blob([content], { type: type || 'text/plain;charset=utf-8' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
   function maybeAutoFillOnOpen() { const rule = getCurrentSiteRule(); const pageKey = `${location.href}|${document.title}`; if (!rule.autoFillOnOpen || autoFilledPageKey === pageKey) return; autoFilledPageKey = pageKey; setTimeout(() => safeCall('自动打开后填充', () => autofillActiveProfile({ overwrite: false })), 1200); }
-  function observeDomChanges() { let timer = null; const observer = new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(() => { const panel = document.querySelector('#rau-panel'); if (panel && getCurrentSiteRule().autoScan) renderPanel(panel); maybeAutoFillOnOpen(); }, 600); }); observer.observe(document.documentElement, { childList: true, subtree: true }); maybeAutoFillOnOpen(); }
+  function observeDomChanges() { let timer = null; const observer = new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(() => { const panel = document.querySelector('#rau-panel'); const activeInsidePanel = panel && panel.contains(document.activeElement); const editingProfiles = state.ui && state.ui.tab === 'profiles'; if (panel && getCurrentSiteRule().autoScan && !state.ui.busy && !(editingProfiles && activeInsidePanel)) renderPanel(panel); maybeAutoFillOnOpen(); }, 600); }); observer.observe(document.documentElement, { childList: true, subtree: true }); maybeAutoFillOnOpen(); }
   function createId() { return `resume-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; }
   function cssEscape(value) { return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"'); }
   function escapeHtml(value) { return String(value == null ? '' : value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;'); }
