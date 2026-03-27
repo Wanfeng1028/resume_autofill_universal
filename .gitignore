@@ -1,3 +1,14 @@
 ﻿*.tmp
 *.log
 node_modules/
+# local resume privacy
+*.pdf
+*.doc
+*.docx
+*.png
+*.jpg
+*.jpeg
+*.webp
+resume-profile*.json
+resume-autofill-universal-data.json
+debug_resume_extract*.txt
