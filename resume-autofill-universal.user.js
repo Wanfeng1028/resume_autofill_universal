@@ -1,18 +1,19 @@
 ﻿// ==UserScript==
 // @name         Resume Autofill Universal
-// @namespace    resume_autofill_universal
-// @version      0.2.0
+// @namespace
+// @version      0.2.1
 // @description  Parse resumes into local profiles and auto-fill recruitment forms with profile switching, mapping UI, OCR, and site-specific rules.
-// @author       @wanfeng
+// @author
 // @match        *://*/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_addStyle
 // @grant        GM_registerMenuCommand
 // @grant        GM_notification
+// @grant        GM_xmlhttpRequest
 // @connect      cdn.jsdelivr.net
 // @connect      unpkg.com
-// @require      https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.min.js
+// @require      https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js
 // @require      https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js
 // @require      https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js
 // ==/UserScript==
@@ -21,7 +22,7 @@
   'use strict';
 
   const STORAGE_KEY = 'resumeAutofillUniversal:state';
-  const VERSION = '0.2.0';
+  const VERSION = '0.2.1';
   const TABS = ['profiles', 'templates', 'autofill', 'mapping', 'rules', 'data', 'logs'];
   const FIELD_DEFS = [
     ['name', '姓名'], ['phone', '手机号'], ['email', '邮箱'], ['wechat', '微信'], ['gender', '性别'], ['birthday', '出生日期'], ['age', '年龄'],
@@ -51,16 +52,16 @@
     experienceYears: ['工作年限', '实习年限', '工作/实习年限', '经验年限', 'experience'],
     currentCompany: ['当前公司', '现公司', '所在公司', 'company'],
     jobStatus: ['求职状态', '求职进度', 'status'],
-    expectedCity: ['期望城市', '意向城市', '工作地点'],
+    expectedCity: ['期望城市', '意向城市', '工作地点', '期望工作地点'],
     expectedJob: ['期望岗位', '意向岗位', '职位方向'],
     expectedSalary: ['期望薪资', '薪资要求', '期望月薪'],
-    portfolio: ['作品集', '个人网站', 'portfolio', 'site', 'blog'],
+    portfolio: ['作品集', '作品', '个人网站', 'portfolio', 'site', 'blog'],
     github: ['github', '代码仓库'],
     linkedin: ['linkedin'],
     skills: ['技能', '技能标签', '专业技能', 'skills', 'skill'],
     languages: ['语言能力', '外语', '语言', 'language'],
     certificate: ['证书', '资格证书', 'certificate'],
-    award: ['获奖经历', '奖励', 'award'],
+    award: ['获奖经历', '获奖', '奖励', 'award'],
     selfIntro: ['自我评价', '个人评价', '个人总结', '个人优势', '自我介绍'],
     project: ['项目经历', '项目经验', 'project'],
     internship: ['实习经历', '工作经历', '实践经历'],
@@ -74,6 +75,10 @@
     politics: { 中共党员: ['党员', '中共党员'], 共青团员: ['团员', '共青团员'], 群众: ['群众'] }
   };
   const SECTION_TITLES = ['教育经历', '项目经历', '项目经验', '实习经历', '工作经历', '专业技能', '技能', '自我评价', '个人优势', '获奖情况', '校园经历', '证书', '语言能力'];
+  const PDF_JS_URLS = ['https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js', 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js'];
+  const PDF_JS_WORKER_URLS = ['https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js', 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js'];
+  const TESSERACT_URLS = ['https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js', 'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js'];
+  const MAMMOTH_URLS = ['https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js', 'https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js'];
   const state = loadState();
   ensureStateShape();
   injectStyles();
@@ -84,7 +89,52 @@
   let autoFilledPageKey = '';
   let pendingImportFile = null;
   let pendingImportFileName = '';
-
+  function getPdfJsLib() { return globalThis.pdfjsLib || globalThis['pdfjs-dist/build/pdf'] || globalThis.pdfjsDistBuildPdf || null; }
+  function getTesseractLib() { return globalThis.Tesseract || null; }
+  function getMammothLib() { return globalThis.mammoth || null; }
+  function requestRemoteText(url) {
+    if (typeof GM_xmlhttpRequest === 'function') {
+      return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+          method: 'GET',
+          url,
+          onload: (response) => {
+            if (response.status >= 200 && response.status < 400 && response.responseText) resolve(response.responseText);
+            else reject(new Error(`\u52a0\u8f7d\u8fdc\u7a0b\u811a\u672c\u5931\u8d25: ${url} (${response.status})`));
+          },
+          onerror: () => reject(new Error(`\u52a0\u8f7d\u8fdc\u7a0b\u811a\u672c\u5931\u8d25: ${url}`))
+        });
+      });
+    }
+    return fetch(url).then((response) => {
+      if (!response.ok) throw new Error(`\u52a0\u8f7d\u8fdc\u7a0b\u811a\u672c\u5931\u8d25: ${url} (${response.status})`);
+      return response.text();
+    });
+  }
+  async function ensureDependency(name, resolver, urls) {
+    const existing = resolver();
+    if (existing) return existing;
+    let lastError = null;
+    for (const url of urls) {
+      try {
+        const source = await requestRemoteText(url);
+        Function(source).call(globalThis);
+        const loaded = resolver();
+        if (loaded) return loaded;
+        lastError = new Error(`${name} \u5df2\u4e0b\u8f7d\u4f46\u672a\u6210\u529f\u521d\u59cb\u5316`);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError || new Error(`${name} \u52a0\u8f7d\u5931\u8d25`);
+  }
+  async function ensurePdfJsLib() {
+    const pdfLib = await ensureDependency('PDF \u89e3\u6790\u5e93', getPdfJsLib, PDF_JS_URLS);
+    if (pdfLib.GlobalWorkerOptions && !pdfLib.GlobalWorkerOptions.workerSrc) pdfLib.GlobalWorkerOptions.workerSrc = PDF_JS_WORKER_URLS[0];
+    return pdfLib;
+  }
+  function ensureTesseractLib() { return ensureDependency('OCR \u8bc6\u522b\u5e93', getTesseractLib, TESSERACT_URLS); }
+  function ensureMammothLib() { return ensureDependency('DOCX \u89e3\u6790\u5e93', getMammothLib, MAMMOTH_URLS); }
   function defaultState() {
     return { version: VERSION, profiles: [], activeProfileId: '', ui: { tab: 'profiles', busy: false }, logs: [], siteRules: {}, mappings: {}, lastScan: [], lastImportText: '' };
   }
@@ -117,7 +167,25 @@
     zhilian: { hosts: ['zhaopin.com'], selectors: ['.resume-item input', '.resume-item textarea', '.resume-item select'], aliases: { internship: ['experience'], project: ['project'] } },
     job51: { hosts: ['51job.com', 'yingjiesheng.com'], selectors: ['.el-input__inner', '.el-textarea__inner', '.el-select input'], aliases: { educationDetail: ['education'], award: ['award'] } },
     lagou: { hosts: ['lagou.com'], selectors: ['.resume-form input', '.resume-form textarea', '.resume-form select'], aliases: { selfIntro: ['description'], project: ['project'] } },
-    shixiseng: { hosts: ['shixiseng.com'], selectors: ['.form-item input', '.form-item textarea', '.form-item select'], aliases: { expectedCity: ['city'], internship: ['experience'] } }
+    shixiseng: { hosts: ['shixiseng.com'], selectors: ['.form-item input', '.form-item textarea', '.form-item select'], aliases: { expectedCity: ['city'], internship: ['experience'] } },
+    xiaomi: {
+      hosts: ['xiaomi.jobs.f.mioffice.cn', 'jobs.f.mioffice.cn', 'jobs.mioffice.cn'],
+      selectors: ['.el-input__inner', '.el-textarea__inner', '.el-select input', '.el-select', '.el-date-editor input', '.el-radio__original', '.el-checkbox__original', '.resume-form input', '.resume-form textarea', '.resume-form select'],
+      aliases: {
+        phone: ['\u624b\u673a\u53f7\u7801', '\u624b\u673a\u53f7'],
+        email: ['\u90ae\u7bb1'],
+        city: ['\u6240\u5728\u5730\u70b9'],
+        hometown: ['\u5bb6\u4e61'],
+        expectedCity: ['\u610f\u5411\u57ce\u5e02', '\u671f\u671b\u5de5\u4f5c\u5730\u70b9'],
+        educationDetail: ['\u6559\u80b2\u7ecf\u5386'],
+        internship: ['\u5b9e\u4e60\u7ecf\u5386'],
+        project: ['\u9879\u76ee\u7ecf\u5386'],
+        portfolio: ['\u4f5c\u54c1'],
+        award: ['\u83b7\u5956'],
+        languages: ['\u8bed\u8a00\u80fd\u529b'],
+        selfIntro: ['\u81ea\u6211\u8bc4\u4ef7']
+      }
+    }
   };
   function getSiteAdapter() { const host = getSiteKey(); return Object.values(SITE_ADAPTERS).find((item) => item.hosts.some((x) => host.includes(x))) || { selectors: [], aliases: {} }; }
   function log(message) { state.logs.push(`${new Date().toLocaleTimeString()} ${message}`); state.logs = state.logs.slice(-80); saveState(); const box = document.querySelector('#rau-log'); if (box) box.textContent = state.logs.join('\n'); }
@@ -200,8 +268,10 @@
     return `<div class="rau-field"><label class="rau-small">${escapeHtml(label)}</label><input class="rau-input" data-field="${key}" value="${escapeHtml(value)}"></div>`;
   }
   function renderProfilesTab(profile) {
-    const selectedFileText = pendingImportFileName ? `已选择文件: ${pendingImportFileName}` : '尚未选择任何文件。';
-    return `<div class="rau-section"><div class="rau-row"><div class="rau-grow"><label class="rau-small">当前简历档案</label><select class="rau-select" id="rau-profile-select">${state.profiles.map((item) => `<option value="${escapeHtml(item.id)}"${item.id === profile.id ? ' selected' : ''}>${escapeHtml(item.name)}</option>`).join('')}</select></div><button class="rau-btn rau-btn-secondary" id="rau-new-profile">新建</button><button class="rau-btn rau-btn-danger" id="rau-delete-profile">删除</button></div><div class="rau-row"><div class="rau-grow"><label class="rau-small">档案名称</label><input class="rau-input" id="rau-profile-name" value="${escapeHtml(profile.name)}"></div></div><div class="rau-row"><input type="file" id="rau-file" class="rau-input rau-grow" accept=".pdf,.docx,.txt,.md,image/*,.png,.jpg,.jpeg,.webp,.json"><button class="rau-btn rau-btn-primary" id="rau-import">上传并解析</button></div><div class="rau-meta">${escapeHtml(selectedFileText)}</div><div class="rau-row"><button class="rau-btn rau-btn-secondary rau-grow" id="rau-export-profile">导出当前档案</button><button class="rau-btn rau-btn-secondary rau-grow" id="rau-import-json">导入 JSON 档案</button></div><div class="rau-meta">支持 PDF / DOCX / TXT / 图片 OCR。导入只保存在本地浏览器脚本存储中，不会写入公共脚本默认数据。</div></div><div class="rau-section"><div class="rau-grid">${FIELD_DEFS.map(([key, label]) => renderFieldEditor(key, label, profile.fields[key] || '')).join('')}</div></div>`;
+    const selectedFileText = pendingImportFileName ? `\u5df2\u9009\u62e9\u6587\u4ef6: ${pendingImportFileName}` : '\u5c1a\u672a\u9009\u62e9\u4efb\u4f55\u6587\u4ef6\u3002';
+    const importButtonLabel = state.ui.busy ? '\u89e3\u6790\u4e2d...' : '\u4e0a\u4f20\u5e76\u89e3\u6790';
+    const disabledAttr = state.ui.busy ? ' disabled' : '';
+    return `<div class="rau-section"><div class="rau-row"><div class="rau-grow"><label class="rau-small">\u5f53\u524d\u7b80\u5386\u6863\u6848</label><select class="rau-select" id="rau-profile-select">${state.profiles.map((item) => `<option value="${escapeHtml(item.id)}"${item.id === profile.id ? ' selected' : ''}>${escapeHtml(item.name)}</option>`).join('')}</select></div><button class="rau-btn rau-btn-secondary" id="rau-new-profile">\u65b0\u5efa</button><button class="rau-btn rau-btn-danger" id="rau-delete-profile">\u5220\u9664</button></div><div class="rau-row"><div class="rau-grow"><label class="rau-small">\u6863\u6848\u540d\u79f0</label><input class="rau-input" id="rau-profile-name" value="${escapeHtml(profile.name)}"></div></div><div class="rau-row"><input type="file" id="rau-file" class="rau-input rau-grow" accept=".pdf,.docx,.txt,.md,image/*,.png,.jpg,.jpeg,.webp,.json"${disabledAttr}><button class="rau-btn rau-btn-primary" id="rau-import"${disabledAttr}>${importButtonLabel}</button></div><div class="rau-meta">${escapeHtml(selectedFileText)}</div><div class="rau-row"><button class="rau-btn rau-btn-secondary rau-grow" id="rau-export-profile">\u5bfc\u51fa\u5f53\u524d\u6863\u6848</button><button class="rau-btn rau-btn-secondary rau-grow" id="rau-import-json">\u5bfc\u5165 JSON \u6863\u6848</button></div><div class="rau-meta">\u652f\u6301 PDF / DOCX / TXT / \u56fe\u7247 OCR\u3002\u5bfc\u5165\u53ea\u4fdd\u5b58\u5728\u672c\u5730\u6d4f\u89c8\u5668\u811a\u672c\u5b58\u50a8\u4e2d\uff0c\u4e0d\u4f1a\u5199\u5165\u516c\u5171\u811a\u672c\u9ed8\u8ba4\u6570\u636e\u3002</div></div><div class="rau-section"><div class="rau-grid">${FIELD_DEFS.map(([key, label]) => renderFieldEditor(key, label, profile.fields[key] || '')).join('')}</div></div>`;
   }
   function renderTemplatesTab(profile) {
     const templates = ensureTemplates(profile);
@@ -244,6 +314,7 @@
       panel.querySelector('#rau-new-profile').addEventListener('click', () => { const id = createId(); state.profiles.unshift(makeProfile(id, `简历-${state.profiles.length + 1}`)); state.activeProfileId = id; saveState(); log('已新建简历档案。'); renderPanel(panel); });
       panel.querySelector('#rau-delete-profile').addEventListener('click', () => { if (state.profiles.length <= 1) { log('至少保留一个简历档案。'); return; } state.profiles = state.profiles.filter((item) => item.id !== profile.id); state.activeProfileId = state.profiles[0].id; saveState(); log('已删除当前简历档案。'); renderPanel(panel); });
       panel.querySelector('#rau-import').addEventListener('click', async () => {
+        if (state.ui.busy) { log('\u6b63\u5728\u5bfc\u5165\uff0c\u8bf7\u7a0d\u5019\u3002'); return; }
         const fileInput = panel.querySelector('#rau-file');
         const file = pendingImportFile || (fileInput.files && fileInput.files[0]);
         if (!file) { log('请选择要导入的文件。'); notify('请先选择要导入的简历文件。'); return; }
@@ -397,13 +468,19 @@
   async function extractTextFromFile(file) {
     const name = file.name.toLowerCase();
     if (name.endsWith('.txt') || name.endsWith('.md')) return await file.text();
-    if (name.endsWith('.docx')) { const arrayBuffer = await file.arrayBuffer(); const result = await mammoth.extractRawText({ arrayBuffer }); return result.value || ''; }
+    if (name.endsWith('.docx')) {
+      const mammothLib = await ensureMammothLib();
+      const arrayBuffer = await file.arrayBuffer();
+      const result = await mammothLib.extractRawText({ arrayBuffer });
+      return result.value || '';
+    }
     if (name.endsWith('.pdf')) return await extractTextFromPdf(file);
     if ((file.type || '').startsWith('image/')) return await extractTextFromImage(file);
     try { return await file.text(); } catch { return ''; }
   }
   async function extractTextFromPdf(file) {
-    const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    const pdfLib = await ensurePdfJsLib();
+    const pdf = await pdfLib.getDocument({ data: await file.arrayBuffer(), disableWorker: true }).promise;
     let text = '';
     for (let pageNo = 1; pageNo <= pdf.numPages; pageNo += 1) {
       const page = await pdf.getPage(pageNo);
@@ -414,11 +491,16 @@
       if (signalText.length >= 20) continue;
       try {
         const viewport = page.getViewport({ scale: 1.7 });
-        const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); canvas.width = viewport.width; canvas.height = viewport.height;
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
         await page.render({ canvasContext: ctx, viewport }).promise;
         const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
         if (blob) text += `${await extractTextFromImage(blob)}\n`;
-      } catch (error) { log(`PDF \u7b2c ${pageNo} \u9875 OCR \u5931\u8d25: ${error.message}`); }
+      } catch (error) {
+        log(`PDF \u7b2c ${pageNo} \u9875 OCR \u5931\u8d25: ${error.message}`);
+      }
     }
     return text;
   }
@@ -447,7 +529,15 @@
     return result;
   }
   async function extractTextFromImage(fileOrBlob) {
-    const result = await Tesseract.recognize(fileOrBlob, 'chi_sim+eng', { logger: (msg) => { if (msg.status === 'recognizing text' && typeof msg.progress === 'number') { const progress = Math.round(msg.progress * 100); if (progress % 25 === 0) log(`OCR 进行中: ${progress}%`); } } });
+    const tesseractLib = await ensureTesseractLib();
+    const result = await tesseractLib.recognize(fileOrBlob, 'chi_sim+eng', {
+      logger: (msg) => {
+        if (msg.status === 'recognizing text' && typeof msg.progress === 'number') {
+          const progress = Math.round(msg.progress * 100);
+          if (progress % 25 === 0) log(`OCR \u8fdb\u884c\u4e2d: ${progress}%`);
+        }
+      }
+    });
     return result.data && result.data.text ? result.data.text : '';
   }
   function parseResumeText(text) {
@@ -573,6 +663,8 @@
   }
   function inferExperienceSubField(meta, type) {
     const lower = String(meta || '').toLowerCase();
+    const isDateRange = lower.includes('range') || lower.includes('daterange') || lower.includes('date range') || lower.includes('\u8d77\u6b62\u65f6\u95f4') || lower.includes('\u65f6\u95f4\u8303\u56f4') || lower.includes('\u65e5\u671f\u8303\u56f4');
+    if (isDateRange) return 'dateRange';
     if (type === 'projects') {
       if (lower.includes('\u540d\u79f0') || lower.includes('\u9879\u76ee\u540d') || lower.includes('project name') || lower.includes('title')) return 'name';
       if (lower.includes('\u89d2\u8272') || lower.includes('\u804c\u8d23') || lower.includes('role') || lower.includes('\u5c97\u4f4d')) return 'role';
@@ -602,6 +694,7 @@
   }
   function getTemplateFieldValue(entry, subField) {
     if (!entry) return '';
+    if (subField === 'dateRange') return [entry.start, entry.end].filter(Boolean).join(' - ');
     const value = entry[subField];
     if (Array.isArray(value)) return value.map((x) => `- ${x}`).join('\n');
     return value || '';
