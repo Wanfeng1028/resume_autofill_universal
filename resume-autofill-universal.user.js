@@ -506,27 +506,55 @@
   }
   function mergePdfTextItems(items) {
     if (!Array.isArray(items) || !items.length) return '';
-    let result = '';
-    let prev = null;
-    items.forEach((item) => {
-      const str = item && item.str ? String(item.str) : '';
-      if (!str) return;
-      if (!prev) { result += str; prev = item; return; }
-      const prevX = prev.transform && typeof prev.transform[4] === 'number' ? prev.transform[4] : 0;
-      const prevY = prev.transform && typeof prev.transform[5] === 'number' ? prev.transform[5] : 0;
-      const currX = item.transform && typeof item.transform[4] === 'number' ? item.transform[4] : 0;
-      const currY = item.transform && typeof item.transform[5] === 'number' ? item.transform[5] : 0;
-      const prevWidth = typeof prev.width === 'number' ? prev.width : 0;
-      const sameLine = Math.abs(currY - prevY) < 2;
-      const gap = currX - (prevX + prevWidth);
-      const shouldBreakLine = prev.hasEOL || item.hasEOL || !sameLine;
-      const shouldAddSpace = sameLine && gap > 8 && /[A-Za-z0-9@.)\]-]$/.test(result) && /^[A-Za-z0-9@(\[]/.test(str);
-      if (shouldBreakLine) result += '\n';
-      else if (shouldAddSpace) result += ' ';
-      result += str;
-      prev = item;
+    const normalizedItems = items
+      .map((item) => {
+        const str = item && item.str ? String(item.str).trim() : '';
+        const transform = item && Array.isArray(item.transform) ? item.transform : [];
+        return {
+          str,
+          x: typeof transform[4] === 'number' ? transform[4] : 0,
+          y: typeof transform[5] === 'number' ? transform[5] : 0,
+          width: typeof item.width === 'number' ? item.width : 0,
+          height: typeof item.height === 'number' ? item.height : 0,
+          hasEOL: Boolean(item && item.hasEOL)
+        };
+      })
+      .filter((item) => item.str)
+      .sort((a, b) => {
+        if (Math.abs(a.y - b.y) > 2.5) return b.y - a.y;
+        return a.x - b.x;
+      });
+    if (!normalizedItems.length) return '';
+
+    const rows = [];
+    normalizedItems.forEach((item) => {
+      const lastRow = rows[rows.length - 1];
+      const tolerance = Math.max(2.5, item.height * 0.35 || 3);
+      if (!lastRow || Math.abs(lastRow.y - item.y) > tolerance) rows.push({ y: item.y, items: [item] });
+      else lastRow.items.push(item);
     });
-    return result;
+
+    return rows.map((row) => {
+      const orderedItems = row.items.slice().sort((a, b) => a.x - b.x);
+      let line = '';
+      let previous = null;
+      orderedItems.forEach((item) => {
+        if (!previous) {
+          line = item.str;
+          previous = item;
+          return;
+        }
+        const previousEnd = previous.x + previous.width;
+        const gap = item.x - previousEnd;
+        const spaceThreshold = Math.max(6, Math.min(16, previous.height * 0.8 || 8));
+        const shouldAddSpace = gap > spaceThreshold && /[\u4e00-\u9fa5A-Za-z0-9@.)\]-]$/.test(line) && /^[\u4e00-\u9fa5A-Za-z0-9@([]/.test(item.str);
+        if (previous.hasEOL) line += '\n';
+        else if (shouldAddSpace) line += ' ';
+        line += item.str;
+        previous = item;
+      });
+      return line.split('\n').map((part) => part.trim()).filter(Boolean).join('\n');
+    }).filter(Boolean).join('\n');
   }
   async function extractTextFromImage(fileOrBlob) {
     const tesseractLib = await ensureTesseractLib();
