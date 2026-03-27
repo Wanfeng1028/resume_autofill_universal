@@ -291,11 +291,11 @@
     return `<div class="rau-field"><label class="rau-small">${escapeHtml(title)}</label><input class="rau-input" data-template-field="${type}" data-template-index="${index}" data-template-key="${field}" value="${escapeHtml(stringValue)}"></div>`;
   }
   function renderAutofillTab(profile, scan) {
-    return `<div class="rau-section"><div class="rau-row"><button class="rau-btn rau-btn-primary rau-grow" id="rau-fill">自动填写当前页面</button><button class="rau-btn rau-btn-secondary" id="rau-scan">重新扫描</button><button class="rau-btn rau-btn-secondary" id="rau-fill-mapped">仅填已映射</button></div><div class="rau-row"><button class="rau-btn rau-btn-secondary rau-grow" id="rau-fill-empty">只填空白字段</button><button class="rau-btn rau-btn-secondary rau-grow" id="rau-fill-all">覆盖当前可识别字段</button></div><div class="rau-meta">${escapeHtml(describeAutofillTargets(profile, scan))}</div></div><div class="rau-section"><div class="rau-list">${scan.slice(0, 80).map((item, index) => `<div class="rau-card"><div class="rau-kv"><strong>#${index + 1} ${escapeHtml(item.tag)}</strong><span class="rau-small">${escapeHtml(item.selector)}</span></div><div class="rau-small">标签信息: ${escapeHtml((item.meta || '').slice(0, 160) || '无')}</div><div class="rau-small">当前识别: <span class="rau-inline-code">${escapeHtml(item.inferredField || '未识别')}</span></div></div>`).join('')}</div></div>`;
+    return `<div class="rau-section"><div class="rau-row"><button class="rau-btn rau-btn-primary rau-grow" id="rau-fill">\u81ea\u52a8\u586b\u5199\u5f53\u524d\u9875\u9762</button><button class="rau-btn rau-btn-secondary" id="rau-scan">\u91cd\u65b0\u626b\u63cf</button><button class="rau-btn rau-btn-secondary" id="rau-fill-mapped">\u4ec5\u586b\u5df2\u6620\u5c04</button></div><div class="rau-row"><button class="rau-btn rau-btn-secondary rau-grow" id="rau-fill-empty">\u53ea\u586b\u7a7a\u767d\u5b57\u6bb5</button><button class="rau-btn rau-btn-secondary rau-grow" id="rau-fill-all">\u8986\u76d6\u5f53\u524d\u53ef\u8bc6\u522b\u5b57\u6bb5</button></div><div class="rau-meta">${escapeHtml(describeAutofillTargets(profile, scan))}</div></div><div class="rau-section"><div class="rau-list">${scan.slice(0, 80).map((item, index) => `<div class="rau-card"><div class="rau-kv"><strong>#${index + 1} ${escapeHtml(item.tag)}</strong><span class="rau-small">${escapeHtml(item.controlType || item.tag)}</span></div><div class="rau-small">\u5b57\u6bb5\u6807\u7b7e: ${escapeHtml((item.label || '').slice(0, 120) || '\u65e0')}</div><div class="rau-small">\u6240\u5728\u533a\u5757: ${escapeHtml((item.section || '').slice(0, 80) || '\u65e0')}</div><div class="rau-small">\u5019\u9009\u9009\u9879: ${escapeHtml((item.optionsText || '').slice(0, 120) || '\u65e0')}</div><div class="rau-small">\u6807\u7b7e\u4fe1\u606f: ${escapeHtml((item.meta || '').slice(0, 160) || '\u65e0')}</div><div class="rau-small">\u5f53\u524d\u8bc6\u522b: <span class="rau-inline-code">${escapeHtml(item.inferredField || '\u672a\u8bc6\u522b')}</span>${item.inferredScore ? ` <span class="rau-small">(${item.inferredScore})</span>` : ''}</div></div>`).join('')}</div></div>`;
   }
   function renderMappingTab(scan) {
     const siteMappings = getSiteMappings();
-    return `<div class="rau-section"><div class="rau-row"><button class="rau-btn rau-btn-secondary rau-grow" id="rau-auto-map">按识别结果生成映射</button><button class="rau-btn rau-btn-secondary" id="rau-clear-mapping">清空本站映射</button></div><div class="rau-meta">字段映射用于解决站点标签写法特殊、自动识别不准的情况。保存后该站点会优先按映射填写。</div></div><div class="rau-section"><div class="rau-table">${scan.slice(0, 80).map((item, index) => `<div class="rau-card rau-map-row"><div><div><strong>#${index + 1} ${escapeHtml(item.tag)}</strong></div><div class="rau-small">${escapeHtml((item.meta || '').slice(0, 120) || item.selector)}</div></div><select class="rau-select" data-map-target="${escapeHtml(item.key)}"><option value="">不映射</option>${FIELD_DEFS.map(([key, label]) => `<option value="${key}"${siteMappings[item.key] === key ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('')}</select><button class="rau-btn rau-btn-secondary" data-highlight="${escapeHtml(item.key)}">高亮字段</button></div>`).join('')}</div></div>`;
+    return `<div class="rau-section"><div class="rau-row"><button class="rau-btn rau-btn-secondary rau-grow" id="rau-auto-map">\u6309\u8bc6\u522b\u7ed3\u679c\u751f\u6210\u6620\u5c04</button><button class="rau-btn rau-btn-secondary" id="rau-clear-mapping">\u6e05\u7a7a\u672c\u7ad9\u6620\u5c04</button></div><div class="rau-meta">\u5b57\u6bb5\u6620\u5c04\u7528\u4e8e\u89e3\u51b3\u7ad9\u70b9\u6807\u7b7e\u5199\u6cd5\u7279\u6b8a\u3001\u81ea\u52a8\u8bc6\u522b\u4e0d\u51c6\u7684\u60c5\u51b5\u3002\u4fdd\u5b58\u540e\u8be5\u7ad9\u70b9\u4f1a\u4f18\u5148\u6309\u6620\u5c04\u586b\u5199\u3002</div></div><div class="rau-section"><div class="rau-table">${scan.slice(0, 80).map((item, index) => `<div class="rau-card rau-map-row"><div><div><strong>#${index + 1} ${escapeHtml(item.tag)}</strong></div><div class="rau-small">${escapeHtml((item.label || item.meta || '').slice(0, 120) || item.selector)}</div><div class="rau-small">${escapeHtml((item.section || item.controlType || '').slice(0, 80))}${item.inferredScore ? ` \u00b7 \u5206\u6570 ${item.inferredScore}` : ''}</div></div><select class="rau-select" data-map-target="${escapeHtml(item.key)}"><option value="">\u4e0d\u6620\u5c04</option>${FIELD_DEFS.map(([key, label]) => `<option value="${key}"${siteMappings[item.key] === key ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('')}</select><button class="rau-btn rau-btn-secondary" data-highlight="${escapeHtml(item.key)}">\u9ad8\u4eae\u5b57\u6bb5</button></div>`).join('')}</div></div>`;
   }
   function renderRulesTab(siteRule) {
     return `<div class="rau-section"><div class="rau-row"><label class="rau-small rau-grow">启用本站规则</label><input type="checkbox" id="rau-rule-enabled" ${siteRule.enabled ? 'checked' : ''}></div><div class="rau-row"><label class="rau-small rau-grow">面板打开时自动扫描</label><input type="checkbox" id="rau-rule-autoscan" ${siteRule.autoScan ? 'checked' : ''}></div><div class="rau-row"><div class="rau-grow"><label class="rau-small">优先选择器</label><textarea class="rau-textarea" id="rau-rule-preferred">${escapeHtml(siteRule.preferredSelectors || '')}</textarea></div></div><div class="rau-row"><div class="rau-grow"><label class="rau-small">忽略选择器</label><textarea class="rau-textarea" id="rau-rule-ignore">${escapeHtml(siteRule.ignoreSelectors || '')}</textarea></div></div><div class="rau-row"><div class="rau-grow"><label class="rau-small">备注</label><textarea class="rau-textarea" id="rau-rule-notes">${escapeHtml(siteRule.notes || '')}</textarea></div></div><div class="rau-row"><button class="rau-btn rau-btn-primary rau-grow" id="rau-save-rules">保存站点规则</button></div></div>`;
@@ -1010,14 +1010,14 @@
     return '';
   }
   function inferExperienceType(meta) {
-    const lower = String(meta || '').toLowerCase();
+    const lower = getCandidateSearchText(meta);
     if (lower.includes('\u9879\u76ee') || lower.includes('project')) return 'projects';
     if (lower.includes('\u5b9e\u4e60') || lower.includes('\u5de5\u4f5c\u7ecf\u5386') || lower.includes('\u5de5\u4f5c\u7ecf\u9a8c') || lower.includes('intern') || lower.includes('company') || lower.includes('\u516c\u53f8')) return 'internships';
     if (lower.includes('\u6559\u80b2') || lower.includes('\u5b66\u6821') || lower.includes('\u4e13\u4e1a') || lower.includes('\u5b66\u5386') || lower.includes('\u5b66\u4f4d') || lower.includes('education')) return 'educations';
     return '';
   }
   function inferExperienceSubField(meta, type) {
-    const lower = String(meta || '').toLowerCase();
+    const lower = getCandidateSearchText(meta);
     const isDateRange = lower.includes('range') || lower.includes('daterange') || lower.includes('date range') || lower.includes('\u8d77\u6b62\u65f6\u95f4') || lower.includes('\u65f6\u95f4\u8303\u56f4') || lower.includes('\u65e5\u671f\u8303\u56f4');
     if (isDateRange) return 'dateRange';
     if (type === 'projects') {
@@ -1062,43 +1062,319 @@
     if (siteRule.preferredSelectors) selectors.unshift(...siteRule.preferredSelectors.split('\n').map((item) => item.trim()).filter(Boolean));
     const ignoreList = siteRule.ignoreSelectors ? siteRule.ignoreSelectors.split('\n').map((item) => item.trim()).filter(Boolean) : [];
     const elements = Array.from(new Set(selectors.flatMap((selector) => safeQuery(selector))));
-    const result = elements.filter((element) => isVisible(element) && !matchesAny(element, ignoreList)).map((element, index) => { const meta = collectElementMetadata(element); const key = buildElementKey(element, index); return { key, element, tag: element.tagName.toLowerCase(), selector: element.id ? `#${element.id}` : buildShortSelector(element), meta, inferredField: inferFieldKey({ key, meta, element }) }; });
-    state.lastScan = result.map((item) => ({ key: item.key, tag: item.tag, selector: item.selector, meta: item.meta, inferredField: item.inferredField })); saveState(); return result;
+    const seenKeys = new Set();
+    const result = elements
+      .filter((element) => isVisible(element) && !matchesAny(element, ignoreList))
+      .map((element, index) => buildScanCandidate(element, index))
+      .filter((candidate) => {
+        if (!candidate || !candidate.key) return false;
+        if (seenKeys.has(candidate.key)) return false;
+        seenKeys.add(candidate.key);
+        return true;
+      });
+    result.forEach((candidate) => {
+      const match = inferFieldMatch(candidate);
+      candidate.inferredField = match.fieldKey;
+      candidate.inferredScore = match.score;
+      candidate.matchReason = match.reason;
+    });
+    state.lastScan = result.map((item) => ({ key: item.key, tag: item.tag, selector: item.selector, meta: item.meta, label: item.label, section: item.section, optionsText: item.optionsText, controlType: item.controlType, inferredField: item.inferredField, inferredScore: item.inferredScore, matchReason: item.matchReason }));
+    saveState();
+    return result;
   }
   function safeQuery(selector) { try { return Array.from(document.querySelectorAll(selector)); } catch { return []; } }
   function matchesAny(element, selectors) { return selectors.some((selector) => { try { return element.matches(selector) || !!element.closest(selector); } catch { return false; } }); }
-  function collectElementMetadata(element) {
-    const pieces = []; const push = (value) => { if (value) pieces.push(String(value).trim()); };
-    push(element.name); push(element.id); push(element.placeholder); push(element.type); push(element.getAttribute && element.getAttribute('aria-label')); push(element.getAttribute && element.getAttribute('title')); push(element.getAttribute && element.getAttribute('data-testid'));
-    if (element.labels) Array.from(element.labels).forEach((label) => push(label.innerText));
-    const wrapper = element.closest('.ant-form-item,.el-form-item,.ivu-form-item,.n-form-item,.form-item,.form-group,.field,.el-col,.ant-col,.form-row,.form-cell,.resume-form-item');
-    if (wrapper) push((wrapper.innerText || '').slice(0, 200));
-    if (element.previousElementSibling) push(element.previousElementSibling.innerText || '');
-    if (element.parentElement) push((element.parentElement.innerText || '').slice(0, 200));
+  function buildScanCandidate(element, index) {
+    const wrapper = findFieldWrapper(element);
+    const controlType = detectControlType(element);
+    const label = collectElementLabelText(element, wrapper);
+    const section = collectElementSectionText(element, wrapper);
+    const context = collectElementContextText(element, wrapper);
+    const optionList = collectElementOptionTexts(element, wrapper, controlType);
+    const optionsText = optionList.slice(0, 24).join(' | ');
+    const key = buildElementKey(element, index, controlType, wrapper, label, section);
+    const selector = element.id ? `#${element.id}` : buildShortSelector(element);
+    const meta = collectElementMetadata(element, { label, section, context, optionsText, controlType });
+    return {
+      key,
+      element,
+      tag: element.tagName.toLowerCase(),
+      selector,
+      meta,
+      label,
+      section,
+      context,
+      optionsText,
+      optionCount: optionList.length,
+      controlType,
+      inputType: String(element.getAttribute && element.getAttribute('type') || '').toLowerCase()
+    };
+  }
+  function findFieldWrapper(element) {
+    return element.closest('.ant-form-item,.el-form-item,.ivu-form-item,.n-form-item,.form-item,.form-group,.field,.field-item,.form-row,.form-cell,.resume-form-item,.resume-item,.item,[data-field]') || element.parentElement;
+  }
+  function detectControlType(element) {
+    if (!element || !element.matches) return 'input';
+    if (element.matches('select')) return 'native-select';
+    if (element.matches('textarea')) return 'textarea';
+    if (element.matches('[contenteditable="true"]')) return 'contenteditable';
+    const type = String(element.getAttribute('type') || '').toLowerCase();
+    if (type === 'radio') return 'radio';
+    if (type === 'checkbox') return 'checkbox';
+    if (type === 'date' || type === 'month' || type === 'datetime-local') return 'date';
+    if (isCustomSelect(element)) return 'custom-select';
+    return 'input';
+  }
+  function safeInnerText(node, maxLength = 220) {
+    if (!node) return '';
+    return normalizeText(String(node.innerText || node.textContent || '')).replace(/\s+/g, ' ').slice(0, maxLength).trim();
+  }
+  function uniqueTextParts(values) {
+    const seen = new Set();
+    return values.map((value) => String(value || '').trim()).filter((value) => value && !seen.has(value) && seen.add(value));
+  }
+  function collectElementLabelText(element, wrapper) {
+    const pieces = [];
+    if (element.labels) Array.from(element.labels).forEach((label) => pieces.push(safeInnerText(label, 80)));
+    if (wrapper) {
+      const labelNodes = Array.from(wrapper.querySelectorAll('label,.ant-form-item-label,.ant-form-item-label label,.el-form-item__label,.form-label,.label,[data-label]')).slice(0, 4);
+      labelNodes.forEach((node) => pieces.push(safeInnerText(node, 80)));
+    }
+    if (element.previousElementSibling) pieces.push(safeInnerText(element.previousElementSibling, 80));
+    if (element.parentElement && element.parentElement !== wrapper) pieces.push(safeInnerText(element.parentElement.firstElementChild, 80));
+    return uniqueTextParts(pieces).join(' | ');
+  }
+  function collectElementSectionText(element, wrapper) {
+    const headingText = findNearbyHeadingText(wrapper || element);
+    if (headingText) return headingText;
+    const formSection = element.closest('[data-section],section,fieldset,.section,.block,.card,.panel,.resume-block');
+    return safeInnerText(formSection && formSection.querySelector('h1,h2,h3,h4,h5,h6,legend,.section-title,.block-title,.card-title,.panel-title,.title'), 80);
+  }
+  function findNearbyHeadingText(node) {
+    let current = node;
+    while (current && current !== document.body) {
+      let sibling = current.previousElementSibling;
+      while (sibling) {
+        const heading = sibling.matches && sibling.matches('h1,h2,h3,h4,h5,h6,legend,.section-title,.block-title,.card-title,.panel-title,.title,.resume-title') ? sibling : sibling.querySelector && sibling.querySelector('h1,h2,h3,h4,h5,h6,legend,.section-title,.block-title,.card-title,.panel-title,.title,.resume-title');
+        const text = safeInnerText(heading, 80);
+        if (text) return text;
+        sibling = sibling.previousElementSibling;
+      }
+      current = current.parentElement;
+    }
+    return '';
+  }
+  function collectElementContextText(element, wrapper) {
+    const pieces = [];
+    pieces.push(safeInnerText(wrapper, 260));
+    if (wrapper && wrapper.parentElement) pieces.push(safeInnerText(wrapper.parentElement, 260));
+    if (element.parentElement && element.parentElement !== wrapper) pieces.push(safeInnerText(element.parentElement, 220));
+    return uniqueTextParts(pieces).join(' | ');
+  }
+  function collectElementOptionTexts(element, wrapper, controlType) {
+    if (controlType === 'native-select') return Array.from(element.options || []).map((option) => safeInnerText(option, 40)).filter(Boolean);
+    if (controlType === 'radio' || controlType === 'checkbox') return collectGroupOptionTexts(element, wrapper, controlType);
+    if (controlType === 'custom-select') {
+      const root = element.closest('.ant-select,.el-select,[role="combobox"]') || element;
+      const visibleOptions = Array.from(document.querySelectorAll('.ant-select-item-option,.el-select-dropdown__item,[role="option"],.select-option,li[role="option"]')).map((option) => safeInnerText(option, 40)).filter(Boolean);
+      const inlineHints = [safeInnerText(root, 120), safeInnerText(root.querySelector && root.querySelector('[title],[aria-label]'), 80)];
+      return uniqueTextParts(visibleOptions.length ? visibleOptions : inlineHints);
+    }
+    return [];
+  }
+  function collectGroupOptionTexts(element, wrapper, controlType) {
+    const scope = element.closest('form,.ant-form,.el-form,.resume-form,.container,.content,.main,.page') || document;
+    const pieces = [];
+    const selector = `input[type="${controlType}"]${element.name ? `[name="${cssEscape(element.name)}"]` : ''}`;
+    Array.from(safeQuery(selector)).forEach((input) => {
+      const root = input.closest('label,.ant-radio-wrapper,.ant-checkbox-wrapper,.el-radio,.el-checkbox,.radio,.checkbox') || input.parentElement;
+      pieces.push(safeInnerText(root, 60));
+      pieces.push(safeInnerText(input, 40));
+      pieces.push(input.value || '');
+    });
+    if (!pieces.length && wrapper) pieces.push(safeInnerText(wrapper, 160));
+    return uniqueTextParts(pieces);
+  }
+  function collectElementMetadata(element, descriptor = {}) {
+    const pieces = [];
+    const push = (value) => { if (value) pieces.push(String(value).trim()); };
+    push(element.name);
+    push(element.id);
+    push(element.placeholder);
+    push(element.type);
+    push(element.getAttribute && element.getAttribute('aria-label'));
+    push(element.getAttribute && element.getAttribute('title'));
+    push(element.getAttribute && element.getAttribute('data-testid'));
+    push(descriptor.label);
+    push(descriptor.section);
+    push(descriptor.optionsText);
+    push(descriptor.context);
     return normalizeText(pieces.join(' | ').toLowerCase());
   }
-  function buildElementKey(element, index) { return `${location.hostname}|${element.tagName.toLowerCase()}|${element.name || ''}|${element.id || ''}|${element.placeholder || ''}|${index}`; }
-  function buildShortSelector(element) { const parts = [element.tagName.toLowerCase()]; if (element.name) parts.push(`[name="${cssEscape(element.name)}"]`); else if (element.placeholder) parts.push(`[placeholder="${cssEscape(element.placeholder)}"]`); return parts.join(''); }
-  function autoGenerateMappings(scan) { const siteMappings = getSiteMappings(); scan.forEach((item) => { if (item.inferredField) siteMappings[item.key] = item.inferredField; }); saveState(); log(`已为本站生成 ${Object.keys(siteMappings).length} 条映射。`); }
-  function highlightFieldByKey(key, scan) { const target = scan.find((item) => item.key === key); if (!target) return; const element = target.element; const old = element.style.outline; element.scrollIntoView({ behavior: 'smooth', block: 'center' }); element.style.outline = '3px solid #ef4444'; setTimeout(() => { element.style.outline = old; }, 2200); }
-  function inferFieldKey(candidate) { const siteMappings = getSiteMappings(); if (siteMappings[candidate.key]) return siteMappings[candidate.key]; const meta = candidate.meta || ''; const adapter = getSiteAdapter(); for (const [key, aliases] of Object.entries(adapter.aliases || {})) { if (aliases.some((alias) => meta.includes(String(alias).toLowerCase()))) return key; } for (const key of Object.keys(FIELD_ALIASES)) { if (FIELD_ALIASES[key].some((alias) => meta.includes(String(alias).toLowerCase()))) return key; } return ''; }
-  function describeAutofillTargets(profile, scan) { const mapped = scan.map((item) => inferFieldKey(item)).filter(Boolean); const uniqueMapped = Array.from(new Set(mapped)); const ready = uniqueMapped.filter((key) => profile.fields[key]); return `发现 ${scan.length} 个候选控件，可识别 ${uniqueMapped.length} 类字段，当前简历可直接填充 ${ready.length} 类。`; }
+  function buildElementKey(element, index, controlType, wrapper, label, section) {
+    const host = location.hostname;
+    if (controlType === 'radio' || controlType === 'checkbox') {
+      const groupName = normalizeSectionToken(element.name || label || section || safeInnerText(wrapper, 80) || element.id || `${controlType}-${index}`);
+      return `${host}|${controlType}|${groupName}`;
+    }
+    if (controlType === 'custom-select') {
+      const root = element.closest('.ant-select,.el-select,[role="combobox"]') || element;
+      const rootName = normalizeSectionToken(root.id || root.getAttribute('aria-controls') || root.getAttribute('aria-labelledby') || root.getAttribute('aria-label') || label || section || `${controlType}-${index}`);
+      return `${host}|${controlType}|${rootName}`;
+    }
+    return `${host}|${element.tagName.toLowerCase()}|${element.name || ''}|${element.id || ''}|${element.placeholder || ''}|${index}`;
+  }
+  function buildShortSelector(element) {
+    const parts = [element.tagName.toLowerCase()];
+    if (element.name) parts.push(`[name="${cssEscape(element.name)}"]`);
+    else if (element.id) parts.push(`#${cssEscape(element.id)}`);
+    else if (element.placeholder) parts.push(`[placeholder="${cssEscape(element.placeholder)}"]`);
+    return parts.join('');
+  }
+  function autoGenerateMappings(scan) {
+    const siteMappings = getSiteMappings();
+    scan.forEach((item) => {
+      if (item.inferredField && (item.inferredScore || 0) >= 10) siteMappings[item.key] = item.inferredField;
+    });
+    saveState();
+    log(`\u5df2\u4e3a\u672c\u7ad9\u751f\u6210 ${Object.keys(siteMappings).length} \u6761\u6620\u5c04\u3002`);
+  }
+  function highlightFieldByKey(key, scan) {
+    const target = scan.find((item) => item.key === key);
+    if (!target) return;
+    const element = target.element;
+    const old = element.style.outline;
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    element.style.outline = '3px solid #ef4444';
+    setTimeout(() => { element.style.outline = old; }, 2200);
+  }
+  function inferFieldMatch(candidate) {
+    const siteMappings = getSiteMappings();
+    if (siteMappings[candidate.key]) return { fieldKey: siteMappings[candidate.key], score: 999, reason: 'manual' };
+    const adapter = getSiteAdapter();
+    const scores = Object.keys(FIELD_ALIASES).map((fieldKey) => scoreFieldCandidate(candidate, fieldKey, adapter)).filter((item) => item.score > 0).sort((a, b) => b.score - a.score);
+    const best = scores[0];
+    const second = scores[1] ? scores[1].score : 0;
+    if (!best || best.score < 10) return { fieldKey: '', score: best ? best.score : 0, reason: '' };
+    if (best.score - second < 3 && best.score < 18) return { fieldKey: '', score: best.score, reason: best.reason };
+    return best;
+  }
+  function inferFieldKey(candidate) { return inferFieldMatch(candidate).fieldKey; }
+  function scoreFieldCandidate(candidate, fieldKey, adapter) {
+    const label = normalizeMatchText(candidate.label);
+    const section = normalizeMatchText(candidate.section);
+    const meta = normalizeMatchText(candidate.meta);
+    const context = normalizeMatchText(candidate.context);
+    const selector = normalizeMatchText(`${candidate.selector || ''} ${candidate.element && candidate.element.name ? candidate.element.name : ''} ${candidate.element && candidate.element.id ? candidate.element.id : ''} ${candidate.element && candidate.element.placeholder ? candidate.element.placeholder : ''}`);
+    const options = normalizeMatchText(candidate.optionsText);
+    const aliases = Array.from(new Set([].concat(FIELD_ALIASES[fieldKey] || [], (adapter.aliases && adapter.aliases[fieldKey]) || [])));
+    let score = 0;
+    const reasons = [];
+    aliases.forEach((alias) => {
+      const normalizedAlias = normalizeMatchText(alias);
+      if (!normalizedAlias) return;
+      score += scoreAliasInText(label, normalizedAlias, 18, reasons, `label:${alias}`);
+      score += scoreAliasInText(section, normalizedAlias, 14, reasons, `section:${alias}`);
+      score += scoreAliasInText(selector, normalizedAlias, 12, reasons, `selector:${alias}`);
+      score += scoreAliasInText(meta, normalizedAlias, 7, reasons, `meta:${alias}`);
+      score += scoreAliasInText(context, normalizedAlias, 4, reasons, `context:${alias}`);
+      score += scoreAliasInText(options, normalizedAlias, 4, reasons, `options:${alias}`);
+    });
+    const searchBlob = `${label} ${section} ${meta} ${options}`;
+    if (LONG_FIELDS.has(fieldKey)) {
+      if (candidate.controlType === 'textarea' || candidate.controlType === 'contenteditable') score += 10;
+      else score -= 6;
+    } else if (candidate.controlType === 'textarea' || candidate.controlType === 'contenteditable') {
+      score -= 5;
+    } else {
+      score += 2;
+    }
+    if (fieldKey === 'project' && /\u9879\u76ee/.test(searchBlob)) score += 30;
+    if (fieldKey === 'internship' && /(\u5b9e\u4e60|\u5de5\u4f5c\u7ecf\u5386|\u5de5\u4f5c\u7ecf\u9a8c)/.test(searchBlob)) score += 30;
+    if (fieldKey === 'educationDetail' && /\u6559\u80b2/.test(searchBlob)) score += 28;
+    if (fieldKey === 'award' && /(\u83b7\u5956|\u8363\u8a89|\u5956\u9879)/.test(searchBlob)) score += 24;
+    if (fieldKey === 'certificate' && /\u8bc1\u4e66/.test(searchBlob)) score += 24;
+    if (fieldKey === 'skills' && /(\u6280\u80fd|\u4e13\u4e1a\u6280\u80fd|\u56e2\u961f\u80fd\u529b)/.test(searchBlob)) score += 24;
+    if (fieldKey === 'selfIntro' && /(\u81ea\u6211\u8bc4\u4ef7|\u4e2a\u4eba\u4f18\u52bf|\u81ea\u6211\u4ecb\u7ecd)/.test(searchBlob)) score += 24;
+    if (fieldKey === 'city' && /(\u73b0\u5c45\u57ce\u5e02|\u6240\u5728\u57ce\u5e02|\u6240\u5728\u5730\u70b9|\u5c45\u4f4f\u57ce\u5e02)/.test(searchBlob)) score += 18;
+    if (fieldKey === 'expectedCity' && /(\u671f\u671b\u57ce\u5e02|\u610f\u5411\u57ce\u5e02|\u5de5\u4f5c\u5730\u70b9|\u57ce\u5e02)/.test(searchBlob)) score += 18;
+    if (fieldKey === 'expectedJob' && /(\u5c97\u4f4d|\u804c\u4f4d|\u65b9\u5411)/.test(searchBlob)) score += 18;
+    if (fieldKey === 'jobStatus' && /(\u5230\u5c97|\u72b6\u6001|\u6c42\u804c\u72b6\u6001)/.test(searchBlob)) score += 18;
+    if (fieldKey === 'phone' && /(\u7535\u8bdd|\u624b\u673a|mobile|tel)/.test(searchBlob)) score += 18;
+    if (fieldKey === 'email' && /(\u90ae\u7bb1|email|mail)/.test(searchBlob)) score += 18;
+    if (fieldKey === 'gender' && /(\u6027\u522b|gender|sex)/.test(searchBlob)) score += 18;
+    if (fieldKey === 'birthday' && /(\u51fa\u751f|\u751f\u65e5|birthday|birth)/.test(searchBlob)) score += 18;
+    if (fieldKey === 'age' && /(\u5e74\u9f84|age)/.test(searchBlob)) score += 18;
+    if (fieldKey === 'school' && /(\u5b66\u6821|\u9662\u6821|school|college|university)/.test(searchBlob)) score += 18;
+    if (fieldKey === 'major' && /(\u4e13\u4e1a|major)/.test(searchBlob)) score += 18;
+    if (fieldKey === 'education' && /(\u5b66\u5386|education)/.test(searchBlob)) score += 18;
+    if (fieldKey === 'degree' && /(\u5b66\u4f4d|degree)/.test(searchBlob)) score += 18;
+    if (fieldKey === 'graduateDate' && /(\u6bd5\u4e1a|graduat)/.test(searchBlob)) score += 18;
+    if (fieldKey === 'portfolio' && /(\u4f5c\u54c1|\u7f51\u7ad9|blog|portfolio|site|url)/.test(searchBlob)) score += 18;
+    if (['native-select', 'custom-select', 'radio', 'checkbox'].includes(candidate.controlType)) score += scoreCandidateOptions(candidate, fieldKey);
+    if (fieldKey === 'award' && /(\u9879\u76ee|\u5b9e\u4e60|\u6559\u80b2)/.test(section)) score -= 10;
+    if (fieldKey === 'project' && /(\u83b7\u5956|\u8363\u8a89|\u8bc1\u4e66)/.test(section)) score -= 12;
+    if (fieldKey === 'internship' && /(\u83b7\u5956|\u8363\u8a89|\u8bc1\u4e66)/.test(section)) score -= 12;
+    return { fieldKey, score, reason: reasons.slice(0, 4).join(', ') };
+  }
+  function scoreAliasInText(text, alias, weight, reasons, reason) {
+    if (!text || !alias) return 0;
+    if (text === alias) { if (reasons.length < 4) reasons.push(reason); return weight + 3; }
+    if (text.includes(alias)) { if (reasons.length < 4) reasons.push(reason); return weight; }
+    return 0;
+  }
+  function normalizeMatchText(value) { return normalizeSectionToken(String(value || '')); }
+  function scoreCandidateOptions(candidate, fieldKey) {
+    const optionText = String(candidate.optionsText || '').toLowerCase();
+    if (!optionText) return 0;
+    let score = scoreOptionDictionaryMatch(optionText, fieldKey);
+    if (fieldKey === 'expectedCity' && /(\u5317\u4eac|\u4e0a\u6d77|\u676d\u5dde|\u5357\u4eac|\u6df1\u5733|\u5e7f\u5dde|\u82cf\u5dde|\u6b66\u6c49|\u6210\u90fd|\u897f\u5b89|\u5929\u6d25|\u91cd\u5e86)/.test(optionText)) score += 12;
+    if (fieldKey === 'jobStatus' && /(\u968f\u65f6\u5230\u5c97|\u7acb\u5373\u5230\u5c97|\u5c3d\u5feb\u5230\u5c97|\u4e00\u5468\u5185\u5230\u5c97|\u4e00\u4e2a\u6708\u5185\u5230\u5c97|\u5728\u804c|\u79bb\u804c)/.test(optionText)) score += 12;
+    return score;
+  }
+  function scoreOptionDictionaryMatch(optionText, fieldKey) {
+    const dictionary = OPTION_DICTIONARY[fieldKey];
+    if (!dictionary) return 0;
+    return Object.entries(dictionary).reduce((total, [standard, aliases]) => {
+      const tokens = [standard].concat(aliases || []);
+      return total + (tokens.some((token) => optionText.includes(String(token).toLowerCase())) ? 8 : 0);
+    }, 0);
+  }
+  function isCompatibleFieldTarget(candidate, fieldKey) {
+    if (!candidate || !fieldKey) return false;
+    if (LONG_FIELDS.has(fieldKey)) return candidate.controlType === 'textarea' || candidate.controlType === 'contenteditable';
+    if (candidate.controlType === 'textarea' || candidate.controlType === 'contenteditable') return false;
+    return true;
+  }
+  function getCandidateSearchText(candidate) {
+    if (!candidate || typeof candidate !== 'object') return String(candidate || '').toLowerCase();
+    return [candidate.label, candidate.section, candidate.context, candidate.meta, candidate.optionsText, candidate.selector].filter(Boolean).join(' ').toLowerCase();
+  }
+  function describeAutofillTargets(profile, scan) {
+    const mapped = scan.map((item) => item.inferredField || inferFieldKey(item)).filter(Boolean);
+    const uniqueMapped = Array.from(new Set(mapped));
+    const ready = uniqueMapped.filter((key) => profile.fields[key]);
+    return `\u53d1\u73b0 ${scan.length} \u4e2a\u5019\u9009\u63a7\u4ef6\uff0c\u53ef\u8bc6\u522b ${uniqueMapped.length} \u7c7b\u5b57\u6bb5\uff0c\u5f53\u524d\u7b80\u5386\u53ef\u76f4\u63a5\u586b\u5145 ${ready.length} \u7c7b\u3002`;
+  }
   function autofillActiveProfile(options) {
     const config = Object.assign({ overwrite: false, mappedOnly: false, emptyOnly: false }, options || {});
-    if (!getCurrentSiteRule().enabled) { log('本站规则已禁用，跳过自动填写。'); return 0; }
+    if (!getCurrentSiteRule().enabled) { log('\u672c\u7ad9\u89c4\u5219\u5df2\u7981\u7528\uff0c\u8df3\u8fc7\u81ea\u52a8\u586b\u5199\u3002'); return 0; }
     const profile = getActiveProfile();
-    const scan = scanPageFields();
+    const siteMappings = getSiteMappings();
+    const scan = scanPageFields().slice().sort((a, b) => (Number(Boolean(siteMappings[b.key])) - Number(Boolean(siteMappings[a.key]))) || ((b.inferredScore || 0) - (a.inferredScore || 0)));
     let filled = 0;
     const expCounters = {};
+    const directFieldUsage = new Set();
     scan.forEach((candidate) => {
       if (config.emptyOnly && hasUserValue(candidate.element)) return;
       if (!config.overwrite && hasUserValue(candidate.element)) return;
-      const meta = candidate.meta || '';
-      const qaAnswer = detectQuestionAnswer(meta, profile);
-      if (qaAnswer && applyValueToField(candidate.element, qaAnswer, 'custom')) { filled += 1; return; }
-      const expType = inferExperienceType(meta);
+      const manualMapped = Boolean(siteMappings[candidate.key]);
+      const searchText = getCandidateSearchText(candidate);
+      const qaAnswer = detectQuestionAnswer(searchText, profile);
+      if (qaAnswer && /(why us|\u4e3a\u4ec0\u4e48\u9009\u62e9|\u4e3a\u4ec0\u4e48\u52a0\u5165|strength|weakness|\u4f18\u70b9|\u7f3a\u70b9|career plan|\u804c\u4e1a\u89c4\u5212|\u95ee\u9898|question)/.test(searchText) && applyValueToField(candidate.element, qaAnswer, 'custom')) { filled += 1; return; }
+      const expType = inferExperienceType(candidate);
       if (expType) {
-        const subField = inferExperienceSubField(meta, expType);
+        const subField = inferExperienceSubField(candidate, expType);
         const templates = ensureTemplates(profile)[expType] || [];
         const counterKey = `${expType}:${subField}`;
         const index = expCounters[counterKey] || 0;
@@ -1110,15 +1386,21 @@
           return;
         }
       }
-      const fieldKey = inferFieldKey(candidate);
+      const fieldKey = candidate.inferredField || inferFieldKey(candidate);
       if (!fieldKey) return;
-      if (config.mappedOnly && !getSiteMappings()[candidate.key]) return;
+      if (config.mappedOnly && !manualMapped) return;
+      if (!manualMapped && !isCompatibleFieldTarget(candidate, fieldKey)) return;
+      if (!manualMapped && directFieldUsage.has(fieldKey)) return;
       const value = profile.fields[fieldKey];
       if (!value) return;
-      if (applyValueToField(candidate.element, value, fieldKey)) filled += 1;
+      if (applyValueToField(candidate.element, value, fieldKey)) {
+        filled += 1;
+        directFieldUsage.add(fieldKey);
+      }
     });
-    log(`自动填写完成，命中 ${filled} 个字段。`);
-    notify(filled ? `自动填写完成，命中 ${filled} 个字段。` : '未匹配到可填写字段，请打开映射页补充站点字段映射。');
+    const recognized = scan.filter((item) => item.inferredField).length;
+    log(`\u81ea\u52a8\u586b\u5199\u5b8c\u6210\uff0c\u547d\u4e2d ${filled} \u4e2a\u5b57\u6bb5\uff0c\u8bc6\u522b\u5b57\u6bb5 ${recognized}/${scan.length}\u3002`);
+    notify(filled ? `\u81ea\u52a8\u586b\u5199\u5b8c\u6210\uff0c\u547d\u4e2d ${filled} \u4e2a\u5b57\u6bb5\u3002` : '\u672a\u5339\u914d\u5230\u53ef\u586b\u5199\u5b57\u6bb5\uff0c\u8bf7\u6253\u5f00\u6620\u5c04\u9875\u8865\u5145\u7ad9\u70b9\u5b57\u6bb5\u6620\u5c04\u3002');
     return filled;
   }
   function hasUserValue(element) { if (element.matches('select')) return !!element.value; if (element.matches('input,textarea')) return !!String(element.value || '').trim(); if (element.matches('[contenteditable="true"]')) return !!String(element.textContent || '').trim(); return false; }
