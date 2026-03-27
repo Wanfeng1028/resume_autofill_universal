@@ -172,14 +172,19 @@
       hosts: ['xiaomi.jobs.f.mioffice.cn', 'jobs.f.mioffice.cn', 'jobs.mioffice.cn'],
       selectors: ['.el-input__inner', '.el-textarea__inner', '.el-select input', '.el-select', '.el-date-editor input', '.el-radio__original', '.el-checkbox__original', '.resume-form input', '.resume-form textarea', '.resume-form select'],
       aliases: {
-        phone: ['\u624b\u673a\u53f7\u7801', '\u624b\u673a\u53f7'],
-        email: ['\u90ae\u7bb1'],
-        city: ['\u6240\u5728\u5730\u70b9'],
-        hometown: ['\u5bb6\u4e61'],
-        expectedCity: ['\u610f\u5411\u57ce\u5e02', '\u671f\u671b\u5de5\u4f5c\u5730\u70b9'],
+        phone: ['\u624b\u673a\u53f7\u7801', '\u624b\u673a\u53f7', 'mobile', 'phone'],
+        email: ['\u90ae\u7bb1', 'email'],
+        city: ['\u6240\u5728\u5730\u70b9', 'living_city', 'current_city'],
+        hometown: ['\u5bb6\u4e61', '\u7c4d\u8d2f', 'native_place', 'hometown'],
+        expectedCity: ['\u610f\u5411\u57ce\u5e02', '\u671f\u671b\u5de5\u4f5c\u5730\u70b9', 'application_preferred_city', 'application_preferred_city_list', 'preferred_city'],
+        expectedJob: ['\u671f\u671b\u5c97\u4f4d', '\u6c42\u804c\u5c97\u4f4d', 'expected_job', 'job_intention'],
         educationDetail: ['\u6559\u80b2\u7ecf\u5386'],
         internship: ['\u5b9e\u4e60\u7ecf\u5386'],
         project: ['\u9879\u76ee\u7ecf\u5386'],
+        school: ['\u5b66\u6821\u540d\u79f0', 'school_name', 'school'],
+        education: ['\u5b66\u5386', 'education'],
+        degree: ['\u5b66\u5386\u7c7b\u578b', '\u5b66\u4f4d', 'degree', 'education_type'],
+        major: ['\u4e13\u4e1a', 'major'],
         portfolio: ['\u4f5c\u54c1'],
         award: ['\u83b7\u5956'],
         languages: ['\u8bed\u8a00\u80fd\u529b'],
@@ -196,7 +201,17 @@
     GM_registerMenuCommand('导出全部数据', () => safeCall('export', exportStateToFile));
   }
   function safeCall(action, fn) {
-    try { return fn(); } catch (error) {
+    try {
+      const result = fn();
+      if (result && typeof result.then === 'function') {
+        return result.catch((error) => {
+          console.error('[Resume Autofill Universal]', action, error);
+          showFallbackPanel(error, action);
+          return null;
+        });
+      }
+      return result;
+    } catch (error) {
       console.error('[Resume Autofill Universal]', action, error);
       showFallbackPanel(error, action);
       return null;
@@ -360,7 +375,7 @@
       panel.querySelectorAll('[data-template-field]').forEach((element) => element.addEventListener('change', () => saveTemplateCardsFromPanel(panel, profile)));
     }
     if (state.ui.tab === 'autofill') {
-      const runAutofill = (action, options) => safeCall(action, () => { const filled = autofillActiveProfile(options); renderPanel(panel); return filled; });
+      const runAutofill = (action, options) => safeCall(action, async () => { const filled = await autofillActiveProfile(options); renderPanel(panel); return filled; });
       panel.querySelector('#rau-fill').addEventListener('click', () => runAutofill('autofillCurrentPage', { overwrite: false }));
       panel.querySelector('#rau-fill-mapped').addEventListener('click', () => runAutofill('autofillMappedOnly', { overwrite: true, mappedOnly: true }));
       panel.querySelector('#rau-fill-empty').addEventListener('click', () => runAutofill('autofillEmptyOnly', { overwrite: false, emptyOnly: true }));
@@ -573,6 +588,7 @@
     const compact = compactResumeText(cleaned);
     const lines = getResumeLines(cleaned);
     const fields = Object.fromEntries(FIELD_DEFS.map(([key]) => [key, '']));
+    const templates = createStructuredTemplates();
     const hits = [];
     const setField = (key, value, options = {}) => {
       const overwrite = Boolean(options.overwrite);
@@ -684,6 +700,159 @@
 
     fields.custom = cleaned.slice(0, 8000);
     return { fields, hits };
+  }
+  function createStructuredTemplates() {
+    return { educations: [], projects: [], internships: [], awards: [], certificates: [], customQuestions: [] };
+  }
+  function populateStructuredTemplates(sections, templates) {
+    templates.educations = parseEducationEntries(sections.educationDetail || '');
+    templates.internships = parseExperienceEntries(sections.internship || '', 'internship');
+    templates.projects = parseExperienceEntries(sections.project || '', 'project');
+    templates.awards = parseSimpleNamedEntries(sections.award || '', 'award');
+    templates.certificates = parseSimpleNamedEntries((sections.certificate || '') || (sections.languages || ''), 'certificate');
+  }
+  function formatEducationTemplates(items) {
+    return items.map((item) => `${item.start || ''}${item.end ? ` ~ ${item.end}` : ''} ${item.school || ''} ${item.degree || ''} ${item.major || ''}`.trim() + `${item.description ? `\n${item.description}` : ''}`).filter(Boolean).join('\n\n');
+  }
+  function formatInternshipTemplates(items) {
+    return items.map((item) => `${item.start || ''}${item.end ? ` ~ ${item.end}` : ''} ${item.company || ''} ${item.role || ''}`.trim() + `${item.description ? `\n${item.description}` : ''}${item.highlights && item.highlights.length ? `\n${item.highlights.map((x) => `- ${x}`).join('\n')}` : ''}`).filter(Boolean).join('\n\n');
+  }
+  function formatProjectTemplates(items) {
+    return items.map((item) => `${item.start || ''}${item.end ? ` ~ ${item.end}` : ''} ${item.name || ''} ${item.role || ''}`.trim() + `${item.description ? `\n${item.description}` : ''}${item.highlights && item.highlights.length ? `\n${item.highlights.map((x) => `- ${x}`).join('\n')}` : ''}${item.stack ? `\n\u6280\u672f\u6808: ${item.stack}` : ''}`).filter(Boolean).join('\n\n');
+  }
+  function applyEducationTemplateFields(item, setField) {
+    if (!item) return;
+    if (item.school) setField('school', item.school, { overwrite: true });
+    if (item.major) setField('major', item.major, { overwrite: true });
+    if (item.degree) {
+      setField('degree', item.degree, { overwrite: true });
+      setField('education', item.degree, { overwrite: true });
+    }
+    if (item.end) setField('graduateDate', item.end, { overwrite: true });
+  }
+  function buildCustomSupplement(sections, fields) {
+    const parts = [];
+    if (sections.campus && sections.campus !== fields.campus) parts.push(`\u6821\u56ed\u7ecf\u5386\n${sections.campus}`);
+    if (sections.selfIntro && !fields.selfIntro) parts.push(`\u81ea\u6211\u8bc4\u4ef7\n${sections.selfIntro}`);
+    return parts.join('\n\n').trim();
+  }
+  function parseEducationEntries(sectionText) {
+    return splitSectionBlocks(sectionText, 'education').map((block) => {
+      const lines = getResumeLines(block);
+      const joined = lines.join(' ');
+      const range = extractDateRangeParts(joined);
+      const school = (lines.find((line) => /(\u5927\u5b66|\u5b66\u9662|University|College)/i.test(line) && !/(\u516c\u53f8|\u96c6\u56e2|\u5b9e\u4e60|\u9879\u76ee)/.test(line)) || '').trim();
+      const degreeToken = ((joined.match(/(\u535a\u58eb|\u7855\u58eb|\u672c\u79d1|\u4e13\u79d1|\u5927\u4e13|\u5b66\u58eb|\u7814\u7a76\u751f)/) || [])[1] || '').trim();
+      const major = extractEducationMajor(lines, school, degreeToken);
+      const description = lines.filter((line) => {
+        const compactLine = line.replace(/\s+/g, '');
+        if (!compactLine) return false;
+        if (school && compactLine === school.replace(/\s+/g, '')) return false;
+        if (range.raw && compactLine.includes(range.raw.replace(/\s+/g, ''))) return false;
+        return !((degreeToken && compactLine === degreeToken) || (major && compactLine === major.replace(/\s+/g, '')));
+      }).join('\n').trim();
+      const degree = normalizeEducationValue(degreeToken || '');
+      return { school, major, degree, start: range.start, end: range.end, description };
+    }).filter((item) => item.school || item.major || item.degree || item.description);
+  }
+  function parseExperienceEntries(sectionText, type) {
+    return splitSectionBlocks(sectionText, type).map((block) => {
+      const lines = getResumeLines(block);
+      const joined = lines.join(' ');
+      const range = extractDateRangeParts(joined);
+      const descriptionLines = [];
+      let company = '';
+      let role = '';
+      let name = '';
+      let stack = '';
+      const highlightLines = [];
+      lines.forEach((line, index) => {
+        const normalized = line.replace(range.pattern || /^$/, '').trim();
+        if (!normalized) return;
+        if (/^(?:\u6280\u672f\u6808|Tech Stack)[:\uFF1A]?/i.test(normalized)) { stack = stripLabelPrefix(normalized); return; }
+        if (/^(?:\u6210\u679c|\u4eae\u70b9|\u4e1a\u7ee9)[:\uFF1A]?/.test(normalized)) { highlightLines.push(stripLabelPrefix(normalized)); return; }
+        if (/^(?:\u804c\u8d23|\u8d1f\u8d23|\u9879\u76ee\u7b80\u4ecb|\u5de5\u4f5c\u5185\u5bb9|\u5b9e\u4e60\u5185\u5bb9)[:\uFF1A]?/.test(normalized)) { descriptionLines.push(stripLabelPrefix(normalized)); return; }
+        if (index === 0) {
+          if (type === 'internship') {
+            company = extractCompanyName(normalized);
+            role = extractRoleName(normalized, company);
+          } else {
+            name = extractProjectName(normalized);
+            role = extractRoleName(normalized, name);
+          }
+          if ((!company && type === 'internship') || (!name && type === 'project')) descriptionLines.push(normalized);
+          return;
+        }
+        if (type === 'internship' && !company && /(\u516c\u53f8|\u96c6\u56e2|\u6709\u9650\u516c\u53f8|\u79d1\u6280|\u4fe1\u606f|\u8f6f\u4ef6|\u7814\u7a76\u9662|\u94f6\u884c)/.test(normalized)) {
+          company = extractCompanyName(normalized) || normalized;
+          if (!role) role = extractRoleName(normalized, company);
+          return;
+        }
+        if (!role && /(\u5b9e\u4e60\u751f|\u5de5\u7a0b\u5e08|\u5f00\u53d1|\u4ea7\u54c1|\u6d4b\u8bd5|\u7b97\u6cd5|\u8fd0\u8425|\u5c97)/.test(normalized) && normalized.length <= 40) { role = normalized; return; }
+        descriptionLines.push(normalized);
+      });
+      const description = descriptionLines.join('\n').trim();
+      if (type === 'internship') return { company, role, start: range.start, end: range.end, description, highlights: uniqueTextParts(highlightLines) };
+      return { name, role, start: range.start, end: range.end, stack, description, highlights: uniqueTextParts(highlightLines) };
+    }).filter((item) => (type === 'internship' ? (item.company || item.role || item.description) : (item.name || item.role || item.description || item.stack)));
+  }
+  function parseSimpleNamedEntries(sectionText) {
+    return getResumeLines(sectionText).map((line) => line.replace(/^[\s\u00B7\u2022\u25AA*\-]+/, '').trim()).filter(Boolean).map((line) => {
+      const range = extractDateRangeParts(line);
+      const dateMatch = line.match(/20\d{2}[./-]\d{1,2}/);
+      return { name: line.replace(range.pattern || /^$/, '').replace(dateMatch ? dateMatch[0] : '', '').trim(), date: normalizeDateToken(dateMatch ? dateMatch[0] : ''), description: line };
+    }).filter((item) => item.name);
+  }
+  function splitSectionBlocks(sectionText, type) {
+    const lines = getResumeLines(sectionText);
+    if (!lines.length) return [];
+    const anchors = [];
+    lines.forEach((line, index) => {
+      if (/(20\d{2}[./-]\d{1,2})\s*(?:~|\uFF5E|\-|\u81f3)\s*(?:20\d{2}[./-]\d{1,2}|\u81f3\u4eca|\u73b0\u5728)/.test(line)) anchors.push(index);
+      else if (type === 'education' && /(\u5927\u5b66|\u5b66\u9662|University|College)/i.test(line) && (index === 0 || /(20\d{2}[./-]\d{1,2})/.test(lines[index - 1]))) anchors.push(index);
+    });
+    if (!anchors.length) return [lines.join('\n')];
+    const filtered = anchors.filter((index, pos) => pos === 0 || index - anchors[pos - 1] > 1);
+    return filtered.map((start, pos) => lines.slice(start, filtered[pos + 1] || lines.length).join('\n')).filter(Boolean);
+  }
+  function extractDateRangeParts(text) {
+    const match = String(text || '').match(/(20\d{2}[./-]\d{1,2})\s*(?:~|\uFF5E|\-|\u81f3)\s*(\u81f3\u4eca|\u73b0\u5728|20\d{2}[./-]\d{1,2})/);
+    return { start: normalizeDateToken(match ? match[1] : ''), end: normalizeDateToken(match ? match[2] : ''), raw: match ? match[0] : '', pattern: match ? new RegExp(escapeRegExp(match[0])) : null };
+  }
+  function normalizeDateToken(value) {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    if (/^(?:\u81f3\u4eca|\u73b0\u5728)$/.test(text)) return '\u81f3\u4eca';
+    return text.replace(/[./]/g, '-');
+  }
+  function extractEducationMajor(lines, school, degreeToken) {
+    const directLine = lines.find((line) => /^\u4e13\u4e1a[:\uFF1A]?/.test(line));
+    if (directLine) return stripLabelPrefix(directLine);
+    let source = lines.join(' ');
+    if (school) source = source.replace(school, ' ');
+    if (degreeToken) source = source.replace(new RegExp(degreeToken, 'g'), ' ');
+    source = source.replace(/(20\d{2}[./-]\d{1,2})\s*(?:~|\uFF5E|\-|\u81f3)\s*(?:20\d{2}[./-]\d{1,2}|\u81f3\u4eca|\u73b0\u5728)/g, ' ');
+    const match = source.match(/([\u4e00-\u9fa5A-Za-z]{2,24}(?:\u5b66|\u5de5\u7a0b|\u6280\u672f|\u79d1\u5b66|\u7ba1\u7406|GIS|AI|Web|\u524d\u7aef))/);
+    return match ? match[1].trim() : '';
+  }
+  function extractCompanyName(text) {
+    const match = String(text || '').trim().match(/([\u4e00-\u9fa5A-Za-z0-9()\uFF08\uFF09]{2,60}?(?:\u96c6\u56e2|\u516c\u53f8|\u6709\u9650\u516c\u53f8|\u79d1\u6280|\u4fe1\u606f|\u8f6f\u4ef6|\u7814\u7a76\u9662|\u5de5\u4f5c\u5ba4|\u94f6\u884c))/);
+    return match ? match[1].trim() : '';
+  }
+  function extractProjectName(text) {
+    const stripped = String(text || '').trim().replace(/^[\-\s]+/, '');
+    return stripped.split(/\s{2,}|\s+(?=\u8d1f\u8d23|\u804c\u8d23|\u89d2\u8272|\u5c97\u4f4d)/)[0].trim();
+  }
+  function extractRoleName(text, prefix) {
+    let line = String(text || '').trim();
+    if (prefix) line = line.replace(prefix, '').trim();
+    const labeled = line.match(/(?:\u89d2\u8272|\u5c97\u4f4d|\u804c\u4f4d|role)[:\uFF1A]?\s*([^\n]{2,30})/i);
+    if (labeled) return labeled[1].trim();
+    const short = line.split(/[\u3002\uFF0C,]/)[0].trim();
+    return /(\u5b9e\u4e60\u751f|\u5de5\u7a0b\u5e08|\u5f00\u53d1|\u4ea7\u54c1|\u6d4b\u8bd5|\u7b97\u6cd5|\u8fd0\u8425|\u5c97)/.test(short) ? short : '';
+  }
+  function escapeRegExp(value) {
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
   function normalizeText(text) {
     return String(text || '')
@@ -800,7 +969,9 @@
     } else if (key === 'languages') {
       add(/\u82f1\u8bed|\u65e5\u8bed|\u97e9\u8bed|\u5fb7\u8bed|\u6cd5\u8bed|CET|IELTS|TOEFL|\u6258\u798f|\u96c5\u601d/, 45);
     }
-    if (mode === 'trailing') score += 6;
+    if (mode === 'forward') score += 12;
+    if (mode === 'combined') score -= 4;
+    if (mode === 'trailing') score -= 10;
     subtract(/\u51fa\u751f\u5e74\u6708|\u6027\u522b|\u7535\u8bdd|\u90ae\u7bb1|\u6c42\u804c\u5c97\u4f4d/, 40);
     return score;
   }
@@ -1142,6 +1313,24 @@
     }
     if (element.previousElementSibling) pieces.push(safeInnerText(element.previousElementSibling, 80));
     if (element.parentElement && element.parentElement !== wrapper) pieces.push(safeInnerText(element.parentElement.firstElementChild, 80));
+    pieces.push(collectNearbyLabelText(element, wrapper));
+    return uniqueTextParts(pieces).join(' | ');
+  }
+  function collectNearbyLabelText(element, wrapper) {
+    const pieces = [];
+    let current = element;
+    for (let depth = 0; depth < 3 && current; depth += 1) {
+      let sibling = current.previousElementSibling;
+      let hops = 0;
+      while (sibling && hops < 3) {
+        const text = safeInnerText(sibling, 60);
+        if (text && text.length <= 40) pieces.push(text);
+        sibling = sibling.previousElementSibling;
+        hops += 1;
+      }
+      current = current.parentElement;
+      if (wrapper && current === wrapper.parentElement) break;
+    }
     return uniqueTextParts(pieces).join(' | ');
   }
   function collectElementSectionText(element, wrapper) {
@@ -1356,7 +1545,7 @@
     const ready = uniqueMapped.filter((key) => profile.fields[key]);
     return `\u53d1\u73b0 ${scan.length} \u4e2a\u5019\u9009\u63a7\u4ef6\uff0c\u53ef\u8bc6\u522b ${uniqueMapped.length} \u7c7b\u5b57\u6bb5\uff0c\u5f53\u524d\u7b80\u5386\u53ef\u76f4\u63a5\u586b\u5145 ${ready.length} \u7c7b\u3002`;
   }
-  function autofillActiveProfile(options) {
+  async function autofillActiveProfile(options) {
     const config = Object.assign({ overwrite: false, mappedOnly: false, emptyOnly: false }, options || {});
     if (!getCurrentSiteRule().enabled) { log('\u672c\u7ad9\u89c4\u5219\u5df2\u7981\u7528\uff0c\u8df3\u8fc7\u81ea\u52a8\u586b\u5199\u3002'); return 0; }
     const profile = getActiveProfile();
@@ -1365,13 +1554,13 @@
     let filled = 0;
     const expCounters = {};
     const directFieldUsage = new Set();
-    scan.forEach((candidate) => {
-      if (config.emptyOnly && hasUserValue(candidate.element)) return;
-      if (!config.overwrite && hasUserValue(candidate.element)) return;
+    for (const candidate of scan) {
+      if (config.emptyOnly && hasUserValue(candidate.element)) continue;
+      if (!config.overwrite && hasUserValue(candidate.element)) continue;
       const manualMapped = Boolean(siteMappings[candidate.key]);
       const searchText = getCandidateSearchText(candidate);
       const qaAnswer = detectQuestionAnswer(searchText, profile);
-      if (qaAnswer && /(why us|\u4e3a\u4ec0\u4e48\u9009\u62e9|\u4e3a\u4ec0\u4e48\u52a0\u5165|strength|weakness|\u4f18\u70b9|\u7f3a\u70b9|career plan|\u804c\u4e1a\u89c4\u5212|\u95ee\u9898|question)/.test(searchText) && applyValueToField(candidate.element, qaAnswer, 'custom')) { filled += 1; return; }
+      if (qaAnswer && /(why us|\u4e3a\u4ec0\u4e48\u9009\u62e9|\u4e3a\u4ec0\u4e48\u52a0\u5165|strength|weakness|\u4f18\u70b9|\u7f3a\u70b9|career plan|\u804c\u4e1a\u89c4\u5212|\u95ee\u9898|question)/.test(searchText) && await applyValueToField(candidate.element, qaAnswer, 'custom')) { filled += 1; continue; }
       const expType = inferExperienceType(candidate);
       if (expType) {
         const subField = inferExperienceSubField(candidate, expType);
@@ -1380,34 +1569,36 @@
         const index = expCounters[counterKey] || 0;
         const entry = templates[index];
         const templatedValue = getTemplateFieldValue(entry, subField);
-        if (templatedValue && applyValueToField(candidate.element, templatedValue, 'custom')) {
+        if (templatedValue && await applyValueToField(candidate.element, templatedValue, 'custom')) {
           expCounters[counterKey] = index + 1;
           filled += 1;
-          return;
+          continue;
         }
       }
       const fieldKey = candidate.inferredField || inferFieldKey(candidate);
-      if (!fieldKey) return;
-      if (config.mappedOnly && !manualMapped) return;
-      if (!manualMapped && !isCompatibleFieldTarget(candidate, fieldKey)) return;
-      if (!manualMapped && directFieldUsage.has(fieldKey)) return;
+      if (!fieldKey) continue;
+      if (config.mappedOnly && !manualMapped) continue;
+      if (!manualMapped && !isCompatibleFieldTarget(candidate, fieldKey)) continue;
+      if (!manualMapped && directFieldUsage.has(fieldKey)) continue;
       const value = profile.fields[fieldKey];
-      if (!value) return;
-      if (applyValueToField(candidate.element, value, fieldKey)) {
+      if (!value) continue;
+      if (await applyValueToField(candidate.element, value, fieldKey)) {
         filled += 1;
         directFieldUsage.add(fieldKey);
+        await delay(40);
       }
-    });
+    }
     const recognized = scan.filter((item) => item.inferredField).length;
     log(`\u81ea\u52a8\u586b\u5199\u5b8c\u6210\uff0c\u547d\u4e2d ${filled} \u4e2a\u5b57\u6bb5\uff0c\u8bc6\u522b\u5b57\u6bb5 ${recognized}/${scan.length}\u3002`);
     notify(filled ? `\u81ea\u52a8\u586b\u5199\u5b8c\u6210\uff0c\u547d\u4e2d ${filled} \u4e2a\u5b57\u6bb5\u3002` : '\u672a\u5339\u914d\u5230\u53ef\u586b\u5199\u5b57\u6bb5\uff0c\u8bf7\u6253\u5f00\u6620\u5c04\u9875\u8865\u5145\u7ad9\u70b9\u5b57\u6bb5\u6620\u5c04\u3002');
     return filled;
   }
+  function delay(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
   function hasUserValue(element) { if (element.matches('select')) return !!element.value; if (element.matches('input,textarea')) return !!String(element.value || '').trim(); if (element.matches('[contenteditable="true"]')) return !!String(element.textContent || '').trim(); return false; }
-  function applyValueToField(element, rawValue, fieldKey) {
+  async function applyValueToField(element, rawValue, fieldKey) {
     const value = normalizeFieldValue(rawValue, fieldKey); if (!value) return false;
     if (element.matches('select')) return fillNativeSelect(element, value, fieldKey);
-    if (isCustomSelect(element)) return fillCustomSelect(element, value, fieldKey);
+    if (isCustomSelect(element)) return await fillCustomSelect(element, value, fieldKey);
     if (element.matches('[contenteditable="true"]')) { element.focus(); element.textContent = value; dispatchInputEvents(element); return true; }
     if (element.matches('textarea,input')) { const type = (element.getAttribute('type') || '').toLowerCase(); if (type === 'radio' || type === 'checkbox') return fillChoiceInput(element, value, fieldKey); trySetNativeValue(element, value); dispatchInputEvents(element); return true; }
     return false;
@@ -1419,12 +1610,36 @@
     const option = Array.from(select.options).find((item) => { const text = `${item.text} ${item.value}`.toLowerCase(); return text.includes(normalized) || normalized.includes(text); }) || findByDictionary(select.options, value, fieldKey);
     if (!option) return false; select.value = option.value; dispatchInputEvents(select); return true;
   }
-  function fillCustomSelect(element, value, fieldKey) {
-    const root = element.closest('.ant-select,.el-select,[role="combobox"]') || element; const clickable = root.matches('[role="combobox"]') ? root : root.querySelector('input,.ant-select-selector,.el-input__inner,[role="combobox"]');
-    if (!clickable) return false; clickable.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); if (typeof clickable.click === 'function') clickable.click();
-    const options = Array.from(document.querySelectorAll('.ant-select-item-option,.el-select-dropdown__item,[role="option"],.select-option,li[role="option"]')); const matched = options.find((option) => compareOptionText(option.innerText, value, fieldKey));
-    if (matched) { matched.click(); return true; }
-    if (clickable.matches && clickable.matches('input')) { trySetNativeValue(clickable, value); dispatchInputEvents(clickable); clickable.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return true; }
+  async function fillCustomSelect(element, value, fieldKey) {
+    const root = element.closest('.ant-select,.el-select,[role="combobox"]') || element;
+    const clickable = root.matches('[role="combobox"]') ? root : root.querySelector('input,.ant-select-selector,.el-input__inner,[role="combobox"]');
+    if (!clickable) return false;
+    clickable.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    if (typeof clickable.click === 'function') clickable.click();
+    if (clickable.dispatchEvent) clickable.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    await delay(120);
+    let options = Array.from(document.querySelectorAll('.ant-select-item-option,.el-select-dropdown__item,[role="option"],.select-option,li[role="option"]'));
+    let matched = options.find((option) => compareOptionText(option.innerText, value, fieldKey));
+    if (!matched && clickable.matches && clickable.matches('input')) {
+      trySetNativeValue(clickable, value);
+      dispatchInputEvents(clickable);
+      await delay(160);
+      options = Array.from(document.querySelectorAll('.ant-select-item-option,.el-select-dropdown__item,[role="option"],.select-option,li[role="option"]'));
+      matched = options.find((option) => compareOptionText(option.innerText, value, fieldKey));
+    }
+    if (matched) {
+      matched.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      matched.click();
+      await delay(80);
+      return true;
+    }
+    if (clickable.matches && clickable.matches('input')) {
+      trySetNativeValue(clickable, value);
+      dispatchInputEvents(clickable);
+      clickable.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await delay(60);
+      return true;
+    }
     return false;
   }
   function fillChoiceInput(input, value, fieldKey) { const root = input.closest('label,.ant-radio-wrapper,.ant-checkbox-wrapper,.el-radio,.el-checkbox') || input.parentElement; const text = `${root && root.innerText ? root.innerText : ''} ${input.value || ''}`; if (!compareOptionText(text, value, fieldKey)) return false; input.click(); return true; }
