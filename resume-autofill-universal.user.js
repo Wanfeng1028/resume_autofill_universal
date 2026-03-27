@@ -74,7 +74,7 @@
     education: { 博士: ['博士', 'phd'], 硕士: ['硕士', '研究生', 'master'], 本科: ['本科', '学士', 'bachelor'], 大专: ['大专', '专科'], 高中: ['高中'] },
     politics: { 中共党员: ['党员', '中共党员'], 共青团员: ['团员', '共青团员'], 群众: ['群众'] }
   };
-  const SECTION_TITLES = ['教育经历', '项目经历', '项目经验', '实习经历', '工作经历', '专业技能', '技能', '自我评价', '个人优势', '获奖情况', '校园经历', '证书', '语言能力'];
+  const SECTION_TITLES = ['\u6559\u80b2\u80cc\u666f', '\u6559\u80b2\u7ecf\u5386', '\u9879\u76ee\u7ecf\u5386', '\u9879\u76ee\u7ecf\u9a8c', '\u5b9e\u4e60\u7ecf\u5386', '\u5de5\u4f5c\u7ecf\u5386', '\u5b9e\u8df5\u7ecf\u5386', '\u4e13\u4e1a\u6280\u80fd', '\u6280\u80fd', '\u8363\u8a89&\u6280\u80fd', '\u6280\u80fd&\u8bc1\u4e66&\u5176\u4ed6\u8363\u8a89', '\u81ea\u6211\u8bc4\u4ef7', '\u4e2a\u4eba\u4f18\u52bf', '\u83b7\u5956\u60c5\u51b5', '\u6821\u56ed\u7ecf\u5386', '\u8bc1\u4e66', '\u8bed\u8a00\u80fd\u529b'];
   const PDF_JS_URLS = ['https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js', 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js'];
   const PDF_JS_WORKER_URLS = ['https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js', 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js'];
   const TESSERACT_URLS = ['https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js', 'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js'];
@@ -543,90 +543,417 @@
   function parseResumeText(text) {
     const cleaned = normalizeText(text);
     const compact = compactResumeText(cleaned);
-    const fields = Object.fromEntries(FIELD_DEFS.map(([k]) => [k, '']));
+    const lines = getResumeLines(cleaned);
+    const fields = Object.fromEntries(FIELD_DEFS.map(([key]) => [key, '']));
     const hits = [];
-    const setField = (key, value) => {
-      const nextValue = tidyValue(value);
-      if (!nextValue || fields[key]) return false;
+    const setField = (key, value, options = {}) => {
+      const overwrite = Boolean(options.overwrite);
+      const append = Boolean(options.append);
+      const nextValue = tidyValue(value, key);
+      if (!nextValue) return false;
+      if (append && LONG_FIELDS.has(key) && fields[key]) {
+        if (fields[key].includes(nextValue)) return false;
+        fields[key] = tidyValue(`${fields[key]}\n${nextValue}`, key);
+        if (!hits.includes(key)) hits.push(key);
+        return true;
+      }
+      if (!overwrite && fields[key]) return false;
+      if (fields[key] === nextValue) return false;
       fields[key] = nextValue;
-      hits.push(key);
+      if (!hits.includes(key)) hits.push(key);
       return true;
     };
-    const directMatchers = [
-      ['name', /(?:\u59d3\u540d|\u540d\u5b57|name)[:\s]*([^\n|]{2,20})/i],
-      ['phone', /(?:\u624b\u673a(?:\u53f7\u7801)?|\u8054\u7cfb\u7535\u8bdd|\u7535\u8bdd|tel|phone)[:\s]*((?:\+?86[-\s]?)?1[3-9]\d{9})/i],
-      ['email', /(?:email|mail|\u90ae\u7bb1|\u7535\u5b50\u90ae\u7bb1)[:\s]*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i],
-      ['wechat', /(?:\u5fae\u4fe1(?:\u53f7)?|wechat)[:\s]*([A-Za-z0-9_-]{5,30})/i],
-      ['gender', /(?:\u6027\u522b|gender)[:\s]*(\u7537|\u5973|male|female)/i],
-      ['birthday', /(?:\u51fa\u751f\u65e5\u671f|\u751f\u65e5|\u51fa\u751f\u5e74\u6708)[:\s]*(\d{4}[./-]\d{1,2}(?:[./-]\d{1,2})?)/i],
-      ['age', /(?:\u5e74\u9f84|age)[:\s]*(\d{1,2})/i],
-      ['city', /(?:\u73b0\u5c45\u57ce\u5e02|\u6240\u5728\u57ce\u5e02|\u5c45\u4f4f\u57ce\u5e02)[:\s]*([^\n|]{2,20})/i],
-      ['hometown', /(?:\u7c4d\u8d2f|\u751f\u6e90\u5730|\u6237\u7c4d)[:\s]*([^\n|]{2,20})/i],
-      ['politics', /(?:\u653f\u6cbb\u9762\u8c8c)[:\s]*([^\n|]{2,20})/i],
-      ['education', /(?:\u6700\u9ad8\u5b66\u5386|\u5b66\u5386)[:\s]*(\u535a\u58eb|\u7855\u58eb|\u672c\u79d1|\u5927\u4e13|\u4e13\u79d1|\u9ad8\u4e2d)/i],
-      ['school', /(?:\u6bd5\u4e1a\u9662\u6821|\u5b66\u6821|\u9662\u6821)[:\s]*([^\n|]{2,40}(?:\u5927\u5b66|\u5b66\u9662|University|College))/i],
-      ['major', /(?:\u4e13\u4e1a)[:\s]*([^\n|]{2,40})/i],
-      ['degree', /(?:\u5b66\u4f4d)[:\s]*([^\n|]{2,20})/i],
-      ['graduateDate', /(?:\u6bd5\u4e1a\u65f6\u95f4|\u6bd5\u4e1a\u65e5\u671f)[:\s]*(\d{4}[./-]\d{1,2})/i],
-      ['expectedCity', /(?:\u671f\u671b\u57ce\u5e02|\u610f\u5411\u57ce\u5e02)[:\s]*([^\n|]{2,30})/i],
-      ['expectedJob', /(?:\u671f\u671b\u5c97\u4f4d|\u610f\u5411\u5c97\u4f4d|\u804c\u4f4d\u65b9\u5411)[:\s]*([^\n|]{2,40})/i],
-      ['expectedSalary', /(?:\u671f\u671b\u85aa\u8d44|\u671f\u671b\u6708\u85aa|\u85aa\u8d44\u8981\u6c42)[:\s]*([^\n|]{2,30})/i]
-    ];
-    directMatchers.forEach(([key, regex]) => {
-      const match = cleaned.match(regex) || compact.match(regex);
-      if (match) setField(key, match[1]);
-    });
-    const anywhereMatchers = [
-      ['phone', /((?:\+?86[-\s]?)?1[3-9]\d{9})/],
-      ['email', /([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i],
-      ['github', /(https?:\/\/github\.com\/[^\s/]+(?:\/[^\s]+)?)/i],
+
+    const headerText = lines.slice(0, 40).join('\n');
+    const searchText = [headerText, cleaned, compact].filter(Boolean).join('\n');
+    [
+      ['email', /(?:\u90ae\u7bb1|\u7535\u5b50\u90ae\u7bb1|email|mail)[:\uFF1A\s]*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i],
+      ['wechat', /(?:\u5fae\u4fe1(?:\u53f7)?|wechat)[:\uFF1A\s]*([A-Za-z0-9_-]{5,30})/i],
+      ['gender', /(?:\u6027\u522b|gender)[:\uFF1A\s]*(\u7537|\u5973|male|female)/i],
+      ['birthday', /(?:\u51fa\u751f\u65e5\u671f|\u751f\u65e5|\u51fa\u751f\u5e74\u6708)[:\uFF1A\s]*(\d{4}[./-]\d{1,2}(?:[./-]\d{1,2})?)/i],
+      ['age', /(?:\u5e74\u9f84|age)[:\uFF1A\s]*(\d{1,2})/i],
+      ['city', /(?:\u73b0\u5c45\u57ce\u5e02|\u6240\u5728\u57ce\u5e02|\u5c45\u4f4f\u57ce\u5e02|\u6240\u5728\u5730\u70b9)[:\uFF1A\s]*([^\n]{2,30})/i],
+      ['hometown', /(?:\u7c4d\u8d2f|\u5bb6\u4e61|\u751f\u6e90\u5730|\u6237\u7c4d)[:\uFF1A\s]*([^\n]{2,30})/i],
+      ['politics', /(?:\u653f\u6cbb\u9762\u8c8c)[:\uFF1A\s]*([^\n]{2,20})/i],
+      ['graduateDate', /(?:\u6bd5\u4e1a\u65f6\u95f4|\u6bd5\u4e1a\u65e5\u671f|\u9884\u8ba1\u6bd5\u4e1a\u65f6\u95f4|\u9884\u8ba1\u6bd5\u4e1a)[:\uFF1A\s]*(\d{4}[./-]\d{1,2})/i],
+      ['expectedSalary', /(?:\u671f\u671b\u85aa\u8d44|\u671f\u671b\u6708\u85aa|\u85aa\u8d44\u8981\u6c42)[:\uFF1A\s]*([^\n]{2,30})/i],
+      ['github', /(https?:\/\/github\.com\/[^\s]+)/i],
       ['linkedin', /(https?:\/\/[^\s]*linkedin\.com\/[^\s]+)/i],
-      ['portfolio', /(https?:\/\/[^\s]+(?:portfolio|blog|site|me|top|cn|com))/i],
-      ['education', /(\u535a\u58eb|\u7855\u58eb|\u672c\u79d1|\u5927\u4e13|\u4e13\u79d1|\u9ad8\u4e2d)/],
-      ['school', /([\u4e00-\u9fa5A-Za-z]{2,40}(?:\u5927\u5b66|\u5b66\u9662|University|College))/]
-    ];
-    anywhereMatchers.forEach(([key, regex]) => {
-      const match = compact.match(regex) || cleaned.match(regex);
+      ['portfolio', /(https?:\/\/[^\s]+(?:portfolio|blog|site|me|top|cn|com)[^\s]*)/i]
+    ].forEach(([key, regex]) => {
+      const match = searchText.match(regex);
       if (match) setField(key, match[1]);
     });
+
+    const nameMatch = searchText.match(/(?:\u59d3\u540d|\u540d\u5b57|name)[:\uFF1A\s]*([^\n|]{2,20})/i);
+    if (nameMatch) setField('name', nameMatch[1]);
     if (!fields.name) {
-      const candidate = cleaned.split('\n').map((line) => line.replace(/\s+/g, '').trim()).filter(Boolean).slice(0, 8).find((line) => /^[\u4e00-\u9fa5\u00b7]{2,6}$/.test(line));
-      if (candidate) setField('name', candidate);
+      const nameLine = lines.slice(0, 25).find((line) => isLikelyNameLine(line));
+      if (nameLine) setField('name', nameLine);
     }
-    if (!fields.graduateDate) {
-      const graduateMatch = compact.match(/(20\d{2}[./-]\d{1,2})(?:\u6bd5\u4e1a|graduat)/i);
-      if (graduateMatch) setField('graduateDate', graduateMatch[1]);
+
+    const phoneLine = lines.find((line) => /(\u7535\u8bdd|\u624b\u673a\u53f7\u7801?|\u8054\u7cfb\u7535\u8bdd|\u8054\u7cfb\u65b9\u5f0f|mobile|phone|tel)/i.test(line));
+    const phoneMatches = (phoneLine || compact).match(/1[3-9]\d{9}/g) || [];
+    if (phoneMatches.length) setField('phone', phoneMatches[phoneMatches.length - 1]);
+    if (!fields.wechat && phoneLine && /\u5fae\u4fe1/.test(phoneLine) && phoneMatches.length > 1) setField('wechat', phoneMatches[0]);
+
+    const expectedJobLine = lines.find((line) => /^(?:\u6c42\u804c\u5c97\u4f4d|\u671f\u671b\u5c97\u4f4d|\u610f\u5411\u5c97\u4f4d|\u804c\u4f4d\u65b9\u5411)[:\uFF1A]/.test(line));
+    if (expectedJobLine) setField('expectedJob', stripLabelPrefix(expectedJobLine));
+    const cityLine = lines.find((line, index) => index < 16 && isLikelyCityLine(line));
+    if (cityLine) setField('expectedCity', cityLine.replace(/\s+/g, ''));
+    const statusLine = lines.find((line) => /(\u968f\u65f6\u5230\u5c97|\u7acb\u5373\u5230\u5c97|\u5c3d\u5feb\u5230\u5c97|\u4e00\u5468\u5185\u5230\u5c97|\u4e00\u4e2a\u6708\u5185\u5230\u5c97|\u6c42\u804c\u4e2d|\u5df2\u79bb\u804c|\u5728\u804c)/.test(line));
+    if (statusLine) setField('jobStatus', statusLine);
+
+    if (!fields.hometown) {
+      const locationLine = lines.slice(0, 18).find((line) => {
+        const normalizedLine = line.replace(/\s+/g, '');
+        return /^(?:\u4e2d\u56fd)?[\u4e00-\u9fa5]{2,10}$/.test(normalizedLine)
+          && !/(\u51fa\u751f\u5e74\u6708|\u51fa\u751f\u65e5\u671f|\u6027\u522b|\u6c11\u65cf|\u653f\u6cbb\u9762\u8c8c|\u7535\u8bdd|\u624b\u673a|\u90ae\u7bb1|\u5fae\u4fe1|\u5e74\u9f84|\u6c42\u804c\u5c97\u4f4d|\u6559\u80b2\u80cc\u666f|\u6559\u80b2\u7ecf\u5386|\u4e2d\u5171\u515a\u5458|\u6c49\u65cf|\u6ee1\u65cf|\u56de\u65cf|\u58ee\u65cf|\u8499\u53e4\u65cf|\u85cf\u65cf|\u7ef4\u543e\u5c14\u65cf|\u82d7\u65cf|\u5f5d\u65cf|\u4f97\u65cf|\u671d\u9c9c\u65cf|\u5e03\u4f9d\u65cf|\u65cf$)/.test(normalizedLine)
+          && !isLikelyNameLine(normalizedLine);
+      });
+      if (locationLine) setField('hometown', locationLine);
     }
-    [[
-      'skills', ['\u4e13\u4e1a\u6280\u80fd', '\u6280\u80fd', '\u6280\u80fd\u6807\u7b7e']
-    ], [
-      'project', ['\u9879\u76ee\u7ecf\u5386', '\u9879\u76ee\u7ecf\u9a8c']
-    ], [
-      'internship', ['\u5b9e\u4e60\u7ecf\u5386', '\u5de5\u4f5c\u7ecf\u5386', '\u5b9e\u8df5\u7ecf\u5386']
-    ], [
-      'educationDetail', ['\u6559\u80b2\u7ecf\u5386']
-    ], [
-      'selfIntro', ['\u81ea\u6211\u8bc4\u4ef7', '\u4e2a\u4eba\u4f18\u52bf', '\u4e2a\u4eba\u603b\u7ed3', '\u81ea\u6211\u4ecb\u7ecd']
-    ], [
-      'award', ['\u83b7\u5956\u7ecf\u5386', '\u83b7\u5956\u60c5\u51b5', '\u5956\u52b1']
-    ], [
-      'certificate', ['\u8bc1\u4e66', '\u8d44\u683c\u8bc1\u4e66']
-    ], [
-      'campus', ['\u6821\u56ed\u7ecf\u5386', '\u5b66\u751f\u5de5\u4f5c', '\u793e\u56e2\u7ecf\u5386']
-    ], [
-      'languages', ['\u8bed\u8a00\u80fd\u529b', '\u5916\u8bed']
-    ]].forEach(([field, titles]) => {
-      if (fields[field]) return;
-      const block = findSection(cleaned, titles) || findSection(compact, titles);
-      if (block) setField(field, block);
-    });
+
+    const sections = extractResumeSections(lines);
+    if (sections.educationDetail) {
+      setField('educationDetail', sections.educationDetail);
+      parseEducationSection(sections.educationDetail, setField);
+    }
+    if (sections.internship) setField('internship', sections.internship);
+    if (sections.project) setField('project', sections.project);
+    if (sections.selfIntro) setField('selfIntro', sections.selfIntro);
+    if (sections.campus) setField('campus', sections.campus);
+    if (sections.languages) setField('languages', sections.languages, { append: true });
+    if (sections.award) setField('award', sections.award, { append: true });
+    if (sections.certificate) setField('certificate', sections.certificate, { append: true });
+    if (sections.skills) splitCompositeSkillsSection(sections.skills, setField);
+
+    if (!fields.school) {
+      const schoolMatch = cleaned.match(/([\u4e00-\u9fa5A-Za-z]{2,40}(?:\u5927\u5b66|\u5b66\u9662|University|College))/);
+      if (schoolMatch) setField('school', schoolMatch[1]);
+    }
+    if (!fields.education || !fields.degree) {
+      const degreeMatch = cleaned.match(/(\u535a\u58eb|\u7855\u58eb|\u672c\u79d1|\u4e13\u79d1|\u5927\u4e13|\u5b66\u58eb|\u7814\u7a76\u751f)/);
+      if (degreeMatch) {
+        const degreeValue = normalizeEducationValue(degreeMatch[1]);
+        setField('degree', degreeValue);
+        setField('education', degreeValue);
+      }
+    }
+    if (!fields.major) {
+      const schoolIndex = lines.findIndex((line) => fields.school && line.includes(fields.school));
+      const majorCandidate = schoolIndex >= 0 ? lines[schoolIndex + 1] : '';
+      if (majorCandidate) {
+        const majorWindow = schoolIndex >= 0 ? lines.slice(schoolIndex + 1, schoolIndex + 4).join('') : majorCandidate;
+        const stripped = majorWindow.replace(/[\uFF08(]?(\u535a\u58eb|\u7855\u58eb|\u672c\u79d1|\u4e13\u79d1|\u5927\u4e13|\u5b66\u58eb|\u7814\u7a76\u751f)[\uFF09)]?/g, '').trim();
+        if (stripped && !/(\u4e3b\u4fee\u8bfe\u7a0b|\u4e13\u4e1a\u6210\u7ee9|\u5728\u6821\u8363\u8a89)/.test(stripped)) setField('major', stripped);
+      }
+    }
+    if (!fields.age && fields.birthday) {
+      const inferredAge = inferAgeFromBirthday(fields.birthday);
+      if (inferredAge) setField('age', String(inferredAge));
+    }
+
     fields.custom = cleaned.slice(0, 8000);
     return { fields, hits };
   }
-  function normalizeText(text) { return String(text).replace(/\r/g, '').replace(/\u00a0/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').replace(/[\uFF1A\uFE55]/g, ':').trim(); }
-  function compactResumeText(text) { return String(text || '').replace(/\r/g, '').replace(/([\u4e00-\u9fa5A-Za-z0-9@._%+-])\s+(?=[\u4e00-\u9fa5A-Za-z0-9@._%+-])/g, '$1').replace(/\s*:\s*/g, ':').replace(/\n{3,}/g, '\n\n').trim(); }
-  function findSection(text, titles) { const lines = String(text || '').split('\n').map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean); for (let i = 0; i < lines.length; i += 1) { const normalizedLine = lines[i].replace(/\s+/g, '').toLowerCase(); const hit = titles.find((item) => normalizedLine.includes(String(item).replace(/\s+/g, '').toLowerCase())); if (!hit) continue; const block = []; for (let j = i + 1; j < lines.length && block.join('\n').length < 1600; j += 1) { const sectionLine = lines[j].replace(/\s+/g, ''); if (SECTION_TITLES.some((title) => sectionLine.includes(String(title).replace(/\s+/g, ''))) && block.length >= 2) break; block.push(lines[j]); } const result = block.join('\n').trim(); if (result) return result; } return ''; }
-  function tidyValue(value) { return String(value).replace(/\s+/g, ' ').trim(); }
+  function normalizeText(text) {
+    return String(text || '')
+      .replace(/\r/g, '')
+      .replace(/\u00a0/g, ' ')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/([\uFF08(])\n+/g, '$1')
+      .replace(/\n+([\uFF09)])/g, '$1')
+      .replace(/\n[ \t]*([~\uFF5E-])[ \t]*\n/g, ' $1 ')
+      .replace(/[ \t]{2,}/g, ' ')
+      .replace(/[\uFF1A\uFE55]/g, ':')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+  function compactResumeText(text) {
+    return String(text || '')
+      .replace(/\r/g, '')
+      .replace(/\u00a0/g, ' ')
+      .replace(/([\u4e00-\u9fa5A-Za-z0-9@._%+-])\s+(?=[\u4e00-\u9fa5A-Za-z0-9@._%+-])/g, '$1')
+      .replace(/\s*:\s*/g, ':')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+  function getResumeLines(text) {
+    return String(text || '')
+      .replace(/\r/g, '')
+      .split('\n')
+      .map((line) => line.replace(/\u00a0/g, ' ').replace(/[ \t]{2,}/g, ' ').trim())
+      .filter(Boolean);
+  }
+  function normalizeSectionToken(value) {
+    return String(value || '').toLowerCase().replace(/[\s:\uFF1A\u00B7\u2022\u25AA*\-\u2014_()[\]\uFF08\uFF09\u3010\u3011,\uFF0C\u3002.!\uFF01\uFF1F?\u3001/&+~\uFF5E]/g, '');
+  }
+  function getSectionTitleMap() {
+    return {
+      educationDetail: ['\u6559\u80b2\u80cc\u666f', '\u6559\u80b2\u7ecf\u5386'],
+      internship: ['\u5b9e\u4e60\u7ecf\u5386', '\u5de5\u4f5c\u7ecf\u5386', '\u5b9e\u8df5\u7ecf\u5386'],
+      project: ['\u9879\u76ee\u7ecf\u5386', '\u9879\u76ee\u7ecf\u9a8c'],
+      skills: ['\u6280\u80fd&\u8bc1\u4e66&\u5176\u4ed6\u8363\u8a89', '\u8363\u8a89&\u6280\u80fd', '\u4e13\u4e1a\u6280\u80fd', '\u6280\u80fd\u6807\u7b7e', '\u6280\u80fd'],
+      selfIntro: ['\u81ea\u6211\u8bc4\u4ef7', '\u4e2a\u4eba\u4f18\u52bf', '\u4e2a\u4eba\u603b\u7ed3', '\u81ea\u6211\u4ecb\u7ecd'],
+      award: ['\u83b7\u5956\u7ecf\u5386', '\u83b7\u5956\u60c5\u51b5', '\u5956\u52b1', '\u8363\u8a89'],
+      certificate: ['\u8bc1\u4e66', '\u8d44\u683c\u8bc1\u4e66'],
+      campus: ['\u6821\u56ed\u7ecf\u5386', '\u5b66\u751f\u5de5\u4f5c', '\u793e\u56e2\u7ecf\u5386'],
+      languages: ['\u8bed\u8a00\u80fd\u529b', '\u5916\u8bed']
+    };
+  }
+  function isSectionTitleLine(line) {
+    const normalizedLine = normalizeSectionToken(line);
+    return SECTION_TITLES.some((title) => {
+      const normalizedTitle = normalizeSectionToken(title);
+      return normalizedLine === normalizedTitle || normalizedLine.endsWith(normalizedTitle) || normalizedTitle.endsWith(normalizedLine);
+    });
+  }
+  function isPersonalInfoLine(line) {
+    const normalizedLine = String(line || '').replace(/\s+/g, '');
+    return /^(\u51fa\u751f\u5e74\u6708|\u51fa\u751f\u65e5\u671f|\u6027\u522b|\u6c11\u65cf|\u653f\u6cbb\u9762\u8c8c|\u7535\u8bdd|\u624b\u673a|\u624b\u673a\u53f7|\u90ae\u7bb1|\u7535\u5b50\u90ae\u7bb1|\u5fae\u4fe1|\u5e74\u9f84|\u5bb6\u4e61|\u7c4d\u8d2f|\u6240\u5728\u5730\u70b9|\u73b0\u5c45\u57ce\u5e02|\u6c42\u804c\u5c97\u4f4d|\u671f\u671b\u5c97\u4f4d|\u968f\u65f6\u5230\u5c97|\u7acb\u5373\u5230\u5c97|\u5c3d\u5feb\u5230\u5c97)/.test(normalizedLine);
+  }
+  function stripLabelPrefix(line) {
+    return String(line || '').replace(/^[\u00B7\u2022\u25AA*\-]?\s*[^:\uFF1A\n]{1,24}[:\uFF1A]\s*/, '').trim();
+  }
+  function isLikelyNameLine(line) {
+    const normalizedLine = String(line || '').replace(/\s+/g, '').trim();
+    return /^[\u4e00-\u9fa5\u00b7]{2,6}$/.test(normalizedLine)
+      && !/(\u51fa\u751f\u5e74\u6708|\u51fa\u751f\u65e5\u671f|\u6027\u522b|\u6c11\u65cf|\u653f\u6cbb\u9762\u8c8c|\u7535\u8bdd|\u624b\u673a|\u90ae\u7bb1|\u6559\u80b2\u80cc\u666f|\u6559\u80b2\u7ecf\u5386|\u5b9e\u4e60\u7ecf\u5386|\u9879\u76ee\u7ecf\u9a8c|\u9879\u76ee\u7ecf\u5386|\u6280\u80fd|\u8bc1\u4e66|\u8363\u8a89|\u5c97\u4f4d|\u5de5\u7a0b\u5e08|\u5f00\u53d1|\u5b9e\u4e60|\u9879\u76ee|\u6c49\u65cf|\u515a\u5458|\u672c\u79d1|\u7855\u58eb|\u535a\u58eb)/.test(normalizedLine);
+  }
+  function isLikelyCityLine(line) {
+    const normalizedLine = String(line || '').replace(/\s+/g, '');
+    if (!normalizedLine || normalizedLine.length > 24) return false;
+    if (!/^[\u4e00-\u9fa5\u3001,\uFF0C/]+$/.test(normalizedLine)) return false;
+    if (!/[\u3001,\uFF0C/]/.test(normalizedLine)) return false;
+    const parts = normalizedLine.split(/[\u3001,\uFF0C/]/).filter(Boolean);
+    return parts.length >= 2 && parts.every((part) => /^[\u4e00-\u9fa5]{2,4}$/.test(part));
+  }
+  function stripSectionNoise(text, key) {
+    let lines = getResumeLines(text).filter((line) => !isSectionTitleLine(line));
+    if (key === 'educationDetail') {
+      const startIndex = lines.findIndex((line) => /(20\d{2}[./-]\d{1,2}.*(?:~|\uFF5E|\u81f3\u4eca|20\d{2}[./-]\d{1,2})|\u5927\u5b66|\u5b66\u9662|\u672c\u79d1|\u7855\u58eb|\u535a\u58eb|\u4e13\u79d1|\u5927\u4e13)/.test(line));
+      if (startIndex > 0) lines = lines.slice(startIndex);
+    }
+    if (key === 'internship' || key === 'project') {
+      const startIndex = lines.findIndex((line) => /(20\d{2}[./-]\d{1,2}|\u804c\u8d23[:\uFF1A]|\u9879\u76ee\u7b80\u4ecb[:\uFF1A]|\u6280\u672f\u6808[:\uFF1A]|\u6210\u679c[:\uFF1A]|\u8d1f\u8d23\u4eba|\u5b9e\u4e60\u751f|\u5de5\u7a0b\u5e08)/.test(line));
+      if (startIndex > 0) lines = lines.slice(startIndex);
+    }
+    lines = lines.filter((line) => !isPersonalInfoLine(line));
+    return tidyValue(lines.join('\n'), key);
+  }
+  function scoreSectionCandidate(key, text, mode) {
+    const normalizedText = compactResumeText(text);
+    if (!normalizedText) return -100;
+    let score = Math.min(normalizedText.length, 2000) / 40;
+    const add = (regex, points) => { if (regex.test(normalizedText)) score += points; };
+    const subtract = (regex, points) => { if (regex.test(normalizedText)) score -= points; };
+    if (key === 'educationDetail') {
+      add(/\u5927\u5b66|\u5b66\u9662|\u672c\u79d1|\u7855\u58eb|\u535a\u58eb|\u4e13\u4e1a\u6210\u7ee9|\u4e3b\u4fee\u8bfe\u7a0b|\u5728\u6821\u8363\u8a89/, 45);
+      add(/20\d{2}[./-]\d{1,2}/, 15);
+      subtract(/\u804c\u8d23|\u4e3e\u63aa|\u6548\u679c|\u9879\u76ee\u7b80\u4ecb|\u6280\u672f\u6808/, 35);
+    } else if (key === 'internship') {
+      add(/\u5b9e\u4e60|\u804c\u8d23|\u4e3e\u63aa|\u6548\u679c|\u516c\u53f8|\u96c6\u56e2|\u5b9e\u4e60\u751f|\u5de5\u7a0b\u5e08/, 45);
+      add(/20\d{2}[./-]\d{1,2}/, 15);
+      if (/20\d{2}[./-]\d{1,2}/.test(normalizedText) && /(\u804c\u8d23|\u4e3e\u63aa|\u6548\u679c)/.test(normalizedText)) score += 30;
+      subtract(/\u9879\u76ee\u7b80\u4ecb|\u6280\u672f\u6808|\u6210\u679c|\u4e3b\u4fee\u8bfe\u7a0b/, 25);
+    } else if (key === 'project') {
+      add(/\u9879\u76ee\u7b80\u4ecb|\u6280\u672f\u6808|\u6210\u679c|\u8d1f\u8d23\u4eba|\u5168\u6808\u5f00\u53d1|\u524d\u7aef\u5f00\u53d1|\u6a21\u578b\u8bad\u7ec3|Docker|FastAPI/, 45);
+      add(/20\d{2}[./-]\d{1,2}/, 15);
+      if (/20\d{2}[./-]\d{1,2}/.test(normalizedText) && /(\u9879\u76ee\u7b80\u4ecb|\u6280\u672f\u6808|\u6210\u679c)/.test(normalizedText)) score += 30;
+      subtract(/\u4e3b\u4fee\u8bfe\u7a0b|\u5728\u6821\u8363\u8a89|\u653f\u6cbb\u9762\u8c8c|\u7535\u8bdd|\u90ae\u7bb1/, 30);
+    } else if (key === 'skills') {
+      add(/\u719f\u6089|\u638c\u63e1|\u4e86\u89e3|\u64c5\u957f|\u7cbe\u901a|\u6280\u80fd|\u8bc1\u4e66|\u8363\u8a89|CET|\u666e\u901a\u8bdd|Vue|React|TypeScript|Three\.js|Mapbox|ECharts|Docker|Git/, 45);
+      subtract(/\u804c\u8d23|\u4e3e\u63aa|\u6548\u679c|\u9879\u76ee\u7b80\u4ecb/, 25);
+    } else if (key === 'award') {
+      add(/\u4e00\u7b49\u5956|\u4e8c\u7b49\u5956|\u4e09\u7b49\u5956|\u5956\u5b66\u91d1|\u6311\u6218\u676f|\u8363\u8a89|\u5fd7\u613f\u8005|\u4e13\u5229|\u8bba\u6587|\u8f6f\u8457/, 45);
+    } else if (key === 'certificate') {
+      add(/\u8bc1\u4e66|CET|\u96c5\u601d|\u6258\u798f|\u666e\u901a\u8bdd|\u8f6f\u8003|\u6559\u5e08\u8d44\u683c/, 45);
+    } else if (key === 'languages') {
+      add(/\u82f1\u8bed|\u65e5\u8bed|\u97e9\u8bed|\u5fb7\u8bed|\u6cd5\u8bed|CET|IELTS|TOEFL|\u6258\u798f|\u96c5\u601d/, 45);
+    }
+    if (mode === 'trailing') score += 6;
+    subtract(/\u51fa\u751f\u5e74\u6708|\u6027\u522b|\u7535\u8bdd|\u90ae\u7bb1|\u6c42\u804c\u5c97\u4f4d/, 40);
+    return score;
+  }
+  function extractResumeSections(lines) {
+    const titleMap = getSectionTitleMap();
+    const titleEntries = Object.entries(titleMap).flatMap(([key, titles]) => titles.map((title) => ({ key, normalized: normalizeSectionToken(title) })));
+    const headings = [];
+    lines.forEach((line, index) => {
+      const normalizedLine = normalizeSectionToken(line);
+      if (!normalizedLine) return;
+      const hit = titleEntries.find((item) => normalizedLine === item.normalized || normalizedLine.endsWith(item.normalized) || item.normalized.endsWith(normalizedLine));
+      if (hit) headings.push({ key: hit.key, index });
+    });
+    const candidates = {};
+    const addCandidate = (key, candidateText, mode) => {
+      const cleanedText = stripSectionNoise(candidateText, key);
+      if (!cleanedText) return;
+      if (!candidates[key]) candidates[key] = [];
+      candidates[key].push({ text: cleanedText, score: scoreSectionCandidate(key, cleanedText, mode) });
+    };
+    headings.forEach((heading, idx) => {
+      const nextIndex = headings[idx + 1] ? headings[idx + 1].index : lines.length;
+      const forwardText = lines.slice(heading.index + 1, nextIndex).join('\n');
+      const prevIndex = idx === 0 ? 0 : headings[idx - 1].index + 1;
+      const trailingText = lines.slice(prevIndex, heading.index).join('\n');
+      addCandidate(heading.key, forwardText, 'forward');
+      addCandidate(heading.key, trailingText, 'trailing');
+      if (heading.key === 'internship' || heading.key === 'project') {
+        const leadText = extractExperienceLead(trailingText);
+        addCandidate(heading.key, [leadText, forwardText].filter(Boolean).join('\n'), 'combined');
+      }
+    });
+    const result = {};
+    Object.keys(titleMap).forEach((key) => {
+      const best = (candidates[key] || []).sort((a, b) => b.score - a.score)[0];
+      if (best && best.score > 0) result[key] = best.text;
+    });
+    return result;
+  }
+  function extractExperienceLead(text) {
+    const lines = getResumeLines(text);
+    const indices = lines.map((line, index) => (/20\d{2}[./-]\d{1,2}/.test(line) ? index : -1)).filter((index) => index >= 0);
+    if (!indices.length) return text;
+    let startIndex = indices[indices.length - 1];
+    for (let index = indices.length - 2; index >= 0; index -= 1) {
+      if (startIndex - indices[index] <= 6) startIndex = indices[index];
+      else break;
+    }
+    return lines.slice(startIndex).join('\n');
+  }
+  function parseEducationSection(sectionText, setField) {
+    const lines = getResumeLines(sectionText);
+    const schoolLine = lines.find((line) => /(\u5927\u5b66|\u5b66\u9662|University|College)/i.test(line) && !/(\u516c\u53f8|\u96c6\u56e2|\u5b9e\u4e60|\u9879\u76ee|\u8d1f\u8d23\u4eba)/.test(line));
+    if (schoolLine) setField('school', schoolLine.replace(/^(\u81f3\u4eca|\u6bd5\u4e1a\u4e8e|\u5c31\u8bfb\u4e8e)/, '').trim());
+    const dateLine = lines.find((line) => /20\d{2}[./-]\d{1,2}.*(?:~|\uFF5E|\u81f3\u4eca|20\d{2}[./-]\d{1,2})/.test(line));
+    if (dateLine) {
+      const dateMatches = dateLine.match(/20\d{2}[./-]\d{1,2}/g) || [];
+      if (dateMatches.length > 1) setField('graduateDate', dateMatches[dateMatches.length - 1]);
+    }
+    const schoolIndex = schoolLine ? lines.indexOf(schoolLine) : -1;
+    let majorSource = lines.find((line) => !/^(?:\u6559\u80b2\u80cc\u666f|\u6559\u80b2\u7ecf\u5386|\u4e3b\u4fee\u8bfe\u7a0b|\u4e13\u4e1a\u6210\u7ee9|\u5728\u6821\u8363\u8a89)/.test(line) && /(\u672c\u79d1|\u7855\u58eb|\u535a\u58eb|\u4e13\u79d1|\u5927\u4e13|\u5b66\u58eb|\u7814\u7a76\u751f)/.test(line) && !/(\u5927\u5b66|\u5b66\u9662|University|College)/i.test(line) && !/^(?:\u672c\u79d1|\u7855\u58eb|\u535a\u58eb|\u4e13\u79d1|\u5927\u4e13|\u5b66\u58eb|\u7814\u7a76\u751f)$/.test(line));
+    if (!majorSource && schoolIndex >= 0) majorSource = lines.slice(schoolIndex + 1, schoolIndex + 4).join('');
+    if (majorSource) {
+      const normalizedLine = majorSource.replace(/\s+/g, '').replace(/\uFF08/g, '?').replace(/\uFF09/g, '?').trim();
+      const pairMatch = normalizedLine.match(/^(.+?)[?(]((?:\u535a\u58eb|\u7855\u58eb|\u672c\u79d1|\u4e13\u79d1|\u5927\u4e13|\u5b66\u58eb|\u7814\u7a76\u751f))[)?]?$/);
+      const degreeToken = pairMatch ? pairMatch[2] : ((normalizedLine.match(/(\u535a\u58eb|\u7855\u58eb|\u672c\u79d1|\u4e13\u79d1|\u5927\u4e13|\u5b66\u58eb|\u7814\u7a76\u751f)/) || [])[1] || '');
+      const majorValue = (pairMatch ? pairMatch[1] : normalizedLine.replace(/[?(]?(\u535a\u58eb|\u7855\u58eb|\u672c\u79d1|\u4e13\u79d1|\u5927\u4e13|\u5b66\u58eb|\u7814\u7a76\u751f)[)?]?/g, '')).trim();
+      if (majorValue && !/(\u4e3b\u4fee\u8bfe\u7a0b|\u4e13\u4e1a\u6210\u7ee9|\u5728\u6821\u8363\u8a89)/.test(majorValue)) setField('major', majorValue);
+      if (degreeToken) {
+        const degreeValue = normalizeEducationValue(degreeToken);
+        setField('degree', degreeValue);
+        setField('education', degreeValue);
+      }
+    }
+    const courseLine = lines.find((line) => /^\u4e3b\u4fee\u8bfe\u7a0b[:\uFF1A]?/.test(line));
+    if (courseLine) setField('skills', stripLabelPrefix(courseLine), { append: true });
+    const awardLine = lines.find((line) => /^\u5728\u6821\u8363\u8a89[:\uFF1A]?/.test(line));
+    if (awardLine) setField('award', stripLabelPrefix(awardLine), { append: true });
+  }
+  function splitCompositeSkillsSection(sectionText, setField) {
+    const lines = getResumeLines(sectionText);
+    const skillLines = [];
+    const awardLines = [];
+    const certificateLines = [];
+    const languageLines = [];
+    let lastBucket = 'skills';
+    lines.forEach((line) => {
+      const strippedLine = line.replace(/^[\s\u00B7\u2022\u25AA*\-]+/, '').trim();
+      if (!strippedLine) return;
+      if (/^(?:\u5176\u4ed6\u8363\u8a89|\u5728\u6821\u8363\u8a89|\u8363\u8a89|\u83b7\u5956|\u5956\u52b1|\u6210\u679c)[:\uFF1A]/.test(strippedLine)) {
+        awardLines.push(stripLabelPrefix(strippedLine));
+        lastBucket = 'award';
+        return;
+      }
+      if (/^(?:\u8bc1\u4e66|\u8d44\u683c\u8bc1\u4e66)[:\uFF1A]/.test(strippedLine)) {
+        certificateLines.push(stripLabelPrefix(strippedLine));
+        lastBucket = 'certificate';
+        return;
+      }
+      if (/^(?:\u8bed\u8a00\u80fd\u529b|\u8bed\u8a00)[:\uFF1A]/.test(strippedLine)) {
+        languageLines.push(stripLabelPrefix(strippedLine));
+        lastBucket = 'languages';
+        return;
+      }
+      if (/^(?:\u6280\u80fd|\u4e13\u4e1a\u6280\u80fd|\u56e2\u961f\u80fd\u529b|\u4e3b\u4fee\u8bfe\u7a0b|\u6280\u672f\u6808)[:\uFF1A]/.test(strippedLine)) {
+        skillLines.push(stripLabelPrefix(strippedLine));
+        lastBucket = 'skills';
+        return;
+      }
+      if (/(?:CET|\u96c5\u601d|\u6258\u798f|\u666e\u901a\u8bdd|\u56db\u7ea7|\u516d\u7ea7)/i.test(strippedLine) && !/(\u9879\u76ee|\u6280\u672f\u6808)/.test(strippedLine)) {
+        certificateLines.push(strippedLine);
+        lastBucket = 'certificate';
+        return;
+      }
+      if (/(\u4e00\u7b49\u5956|\u4e8c\u7b49\u5956|\u4e09\u7b49\u5956|\u5956\u5b66\u91d1|\u6311\u6218\u676f|\u5fd7\u613f\u8005|\u4e13\u5229|\u8bba\u6587|\u8f6f\u8457)/.test(strippedLine) && !/(\u719f\u6089|\u638c\u63e1|\u4e86\u89e3|\u64c5\u957f|\u7cbe\u901a)/.test(strippedLine)) {
+        awardLines.push(strippedLine);
+        lastBucket = 'award';
+        return;
+      }
+      if (/(\u82f1\u8bed|\u65e5\u8bed|\u97e9\u8bed|\u5fb7\u8bed|\u6cd5\u8bed|CET|IELTS|TOEFL|\u6258\u798f|\u96c5\u601d)/i.test(strippedLine)) {
+        languageLines.push(strippedLine);
+        lastBucket = 'languages';
+        return;
+      }
+      if (/(\u719f\u6089|\u638c\u63e1|\u4e86\u89e3|\u64c5\u957f|\u7cbe\u901a|Vue|React|TypeScript|Three\.js|Mapbox|ECharts|Docker|Git|PostGIS|GDAL|FastAPI|Cursor|ClaudeCode|Trae)/i.test(strippedLine)) {
+        skillLines.push(strippedLine);
+        lastBucket = 'skills';
+        return;
+      }
+      if (lastBucket === 'award') awardLines.push(strippedLine);
+      else if (lastBucket === 'certificate') certificateLines.push(strippedLine);
+      else if (lastBucket === 'languages') languageLines.push(strippedLine);
+      else skillLines.push(strippedLine);
+    });
+    if (skillLines.length) setField('skills', joinUniqueLines(skillLines), { append: true });
+    if (awardLines.length) setField('award', joinUniqueLines(awardLines), { append: true });
+    if (certificateLines.length) setField('certificate', joinUniqueLines(certificateLines), { append: true });
+    if (languageLines.length) setField('languages', joinUniqueLines(languageLines), { append: true });
+  }
+  function joinUniqueLines(lines) {
+    const seen = new Set();
+    return lines.map((line) => String(line || '').trim()).filter((line) => line && !seen.has(line) && seen.add(line)).join('\n');
+  }
+  function normalizeEducationValue(value) {
+    const text = String(value || '').trim();
+    if (/\u535a\u58eb/.test(text)) return '\u535a\u58eb';
+    if (/\u7855\u58eb|\u7814\u7a76\u751f/.test(text)) return '\u7855\u58eb';
+    if (/\u672c\u79d1|\u5b66\u58eb/.test(text)) return '\u672c\u79d1';
+    if (/\u4e13\u79d1|\u5927\u4e13/.test(text)) return '\u4e13\u79d1';
+    return text;
+  }
+  function inferAgeFromBirthday(value) {
+    const match = String(value || '').match(/(\d{4})[./-](\d{1,2})(?:[./-](\d{1,2}))?/);
+    if (!match) return 0;
+    const year = Number(match[1]);
+    const month = Number(match[2] || 1);
+    const day = Number(match[3] || 1);
+    if (!year || !month || !day) return 0;
+    const now = new Date();
+    let age = now.getFullYear() - year;
+    const monthDiff = now.getMonth() + 1 - month;
+    if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < day)) age -= 1;
+    return age > 0 && age < 100 ? age : 0;
+  }
+  function findSection(text, titles) {
+    const lines = getResumeLines(text);
+    const sections = extractResumeSections(lines);
+    const titleMap = getSectionTitleMap();
+    const matchedKey = Object.keys(titleMap).find((key) => titles.some((title) => titleMap[key].includes(title)));
+    if (matchedKey && sections[matchedKey]) return sections[matchedKey];
+    const startIndex = lines.findIndex((line) => titles.some((title) => normalizeSectionToken(line).includes(normalizeSectionToken(title))));
+    if (startIndex < 0) return '';
+    return tidyValue(lines.slice(startIndex + 1).join('\n'), matchedKey || '');
+  }
+  function tidyValue(value, fieldKey = '') {
+    const text = String(value || '').replace(/\r/g, '').replace(/\u00a0/g, ' ');
+    if (LONG_FIELDS.has(fieldKey)) {
+      return text.split('\n').map((line) => line.replace(/[ \t]{2,}/g, ' ').trim()).filter((line, index, array) => line || (index > 0 && array[index - 1])).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+    }
+    return text.replace(/\s+/g, ' ').trim();
+  }
   function detectQuestionAnswer(meta, profile) {
     const templates = ensureTemplates(profile);
     const questions = (templates.customQuestions || []).slice().sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0));
