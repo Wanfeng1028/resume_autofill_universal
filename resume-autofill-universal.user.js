@@ -387,7 +387,12 @@
     const parsed = parseResumeText(text);
     if (!parsed.fields.custom) parsed.fields.custom = text.slice(0, 8000);
     profile.fileName = file.name; profile.importedAt = new Date().toISOString(); profile.sourceText = text.slice(0, 120000); profile.fields = Object.assign({}, profile.fields, parsed.fields);
-    state.lastImportText = text.slice(0, 6000); saveState(); log(`解析完成: ${parsed.hits.length ? parsed.hits.join('、') : '未命中显式字段，已保留原文供手动修正'}`);
+    const filledCount = Object.values(parsed.fields).filter((value) => String(value || '').trim()).length;
+    state.lastImportText = text.slice(0, 6000);
+    saveState();
+    log(`\u89e3\u6790\u5b8c\u6210: ${parsed.hits.length ? parsed.hits.join('\u3001') : '\u672a\u547d\u4e2d\u663e\u5f0f\u5b57\u6bb5\uff0c\u5df2\u4fdd\u7559\u539f\u6587\u4f9b\u624b\u52a8\u4fee\u6b63'}\uff0c\u5171\u5199\u5165 ${filledCount} \u9879\u5b57\u6bb5\u3002`);
+    if (!filledCount) notify('\u5df2\u63d0\u53d6\u6587\u672c\uff0c\u4f46\u6682\u672a\u5339\u914d\u5230\u7ed3\u6784\u5316\u5b57\u6bb5\uff0c\u53ef\u7ee7\u7eed\u5728\u5b57\u6bb5\u6a21\u677f\u6216\u5b57\u6bb5\u6620\u5c04\u4e2d\u8865\u5145\u3002');
+
   }
   async function extractTextFromFile(file) {
     const name = file.name.toLowerCase();
@@ -403,35 +408,134 @@
     for (let pageNo = 1; pageNo <= pdf.numPages; pageNo += 1) {
       const page = await pdf.getPage(pageNo);
       const content = await page.getTextContent();
-      const pageText = content.items.map((item) => item.str).join(' ');
+      const pageText = mergePdfTextItems(content.items || []);
       text += `${pageText}\n`;
-      if (pageText.trim()) continue;
+      const signalText = compactResumeText(pageText).replace(/[^\u4e00-\u9fa5A-Za-z0-9@.]/g, '');
+      if (signalText.length >= 20) continue;
       try {
         const viewport = page.getViewport({ scale: 1.7 });
         const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); canvas.width = viewport.width; canvas.height = viewport.height;
         await page.render({ canvasContext: ctx, viewport }).promise;
         const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
         if (blob) text += `${await extractTextFromImage(blob)}\n`;
-      } catch (error) { log(`PDF 第 ${pageNo} 页 OCR 失败: ${error.message}`); }
+      } catch (error) { log(`PDF \u7b2c ${pageNo} \u9875 OCR \u5931\u8d25: ${error.message}`); }
     }
     return text;
+  }
+  function mergePdfTextItems(items) {
+    if (!Array.isArray(items) || !items.length) return '';
+    let result = '';
+    let prev = null;
+    items.forEach((item) => {
+      const str = item && item.str ? String(item.str) : '';
+      if (!str) return;
+      if (!prev) { result += str; prev = item; return; }
+      const prevX = prev.transform && typeof prev.transform[4] === 'number' ? prev.transform[4] : 0;
+      const prevY = prev.transform && typeof prev.transform[5] === 'number' ? prev.transform[5] : 0;
+      const currX = item.transform && typeof item.transform[4] === 'number' ? item.transform[4] : 0;
+      const currY = item.transform && typeof item.transform[5] === 'number' ? item.transform[5] : 0;
+      const prevWidth = typeof prev.width === 'number' ? prev.width : 0;
+      const sameLine = Math.abs(currY - prevY) < 2;
+      const gap = currX - (prevX + prevWidth);
+      const shouldBreakLine = prev.hasEOL || item.hasEOL || !sameLine;
+      const shouldAddSpace = sameLine && gap > 8 && /[A-Za-z0-9@.)\]-]$/.test(result) && /^[A-Za-z0-9@(\[]/.test(str);
+      if (shouldBreakLine) result += '\n';
+      else if (shouldAddSpace) result += ' ';
+      result += str;
+      prev = item;
+    });
+    return result;
   }
   async function extractTextFromImage(fileOrBlob) {
     const result = await Tesseract.recognize(fileOrBlob, 'chi_sim+eng', { logger: (msg) => { if (msg.status === 'recognizing text' && typeof msg.progress === 'number') { const progress = Math.round(msg.progress * 100); if (progress % 25 === 0) log(`OCR 进行中: ${progress}%`); } } });
     return result.data && result.data.text ? result.data.text : '';
   }
   function parseResumeText(text) {
-    const cleaned = normalizeText(text); const fields = Object.fromEntries(FIELD_DEFS.map(([k]) => [k, ''])); const hits = [];
+    const cleaned = normalizeText(text);
+    const compact = compactResumeText(cleaned);
+    const fields = Object.fromEntries(FIELD_DEFS.map(([k]) => [k, '']));
+    const hits = [];
+    const setField = (key, value) => {
+      const nextValue = tidyValue(value);
+      if (!nextValue || fields[key]) return false;
+      fields[key] = nextValue;
+      hits.push(key);
+      return true;
+    };
     const directMatchers = [
-      ['name', /(?:姓名|名字|Name)[:：\s]+([^\n|]{2,20})/i], ['phone', /(?:手机(?:号码)?|联系电话|电话|Tel|Phone)[:：\s]+((?:\+?86[-\s]?)?1[3-9]\d{9})/i], ['email', /([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i], ['wechat', /(?:微信(?:号)?|WeChat)[:：\s]+([A-Za-z0-9_-]{5,30})/i], ['gender', /(?:性别|Gender)[:：\s]+(男|女|Male|Female)/i], ['birthday', /(?:出生日期|生日|出生年月)[:：\s]+(\d{4}[./-]\d{1,2}(?:[./-]\d{1,2})?)/i], ['age', /(?:年龄|Age)[:：\s]+(\d{1,2})/i], ['city', /(?:现居城市|所在城市|居住城市)[:：\s]+([^\n|]{2,20})/i], ['hometown', /(?:籍贯|生源地|户籍)[:：\s]+([^\n|]{2,20})/i], ['politics', /(?:政治面貌)[:：\s]+([^\n|]{2,20})/i], ['education', /(?:最高学历|学历)[:：\s]+(博士|硕士|本科|大专|专科|高中)/i], ['school', /(?:毕业院校|学校|院校)[:：\s]+([^\n|]{2,40}(?:大学|学院|University|College))/i], ['major', /(?:专业)[:：\s]+([^\n|]{2,40})/i], ['degree', /(?:学位)[:：\s]+([^\n|]{2,20})/i], ['graduateDate', /(?:毕业时间|毕业日期)[:：\s]+(\d{4}[./-]\d{1,2})/i], ['portfolio', /(https?:\/\/[^\s]+(?:portfolio|blog|site|me|top|cn|com))/i], ['github', /(https?:\/\/github\.com\/[^\s/]+(?:\/[^\s]+)?)/i], ['linkedin', /(https?:\/\/[^\s]*linkedin\.com\/[^\s]+)/i], ['expectedCity', /(?:期望城市|意向城市)[:：\s]+([^\n|]{2,30})/i], ['expectedJob', /(?:期望岗位|意向岗位|职位方向)[:：\s]+([^\n|]{2,40})/i], ['expectedSalary', /(?:期望薪资|期望月薪|薪资要求)[:：\s]+([^\n|]{2,30})/i]
+      ['name', /(?:\u59d3\u540d|\u540d\u5b57|name)[:\s]*([^\n|]{2,20})/i],
+      ['phone', /(?:\u624b\u673a(?:\u53f7\u7801)?|\u8054\u7cfb\u7535\u8bdd|\u7535\u8bdd|tel|phone)[:\s]*((?:\+?86[-\s]?)?1[3-9]\d{9})/i],
+      ['email', /(?:email|mail|\u90ae\u7bb1|\u7535\u5b50\u90ae\u7bb1)[:\s]*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i],
+      ['wechat', /(?:\u5fae\u4fe1(?:\u53f7)?|wechat)[:\s]*([A-Za-z0-9_-]{5,30})/i],
+      ['gender', /(?:\u6027\u522b|gender)[:\s]*(\u7537|\u5973|male|female)/i],
+      ['birthday', /(?:\u51fa\u751f\u65e5\u671f|\u751f\u65e5|\u51fa\u751f\u5e74\u6708)[:\s]*(\d{4}[./-]\d{1,2}(?:[./-]\d{1,2})?)/i],
+      ['age', /(?:\u5e74\u9f84|age)[:\s]*(\d{1,2})/i],
+      ['city', /(?:\u73b0\u5c45\u57ce\u5e02|\u6240\u5728\u57ce\u5e02|\u5c45\u4f4f\u57ce\u5e02)[:\s]*([^\n|]{2,20})/i],
+      ['hometown', /(?:\u7c4d\u8d2f|\u751f\u6e90\u5730|\u6237\u7c4d)[:\s]*([^\n|]{2,20})/i],
+      ['politics', /(?:\u653f\u6cbb\u9762\u8c8c)[:\s]*([^\n|]{2,20})/i],
+      ['education', /(?:\u6700\u9ad8\u5b66\u5386|\u5b66\u5386)[:\s]*(\u535a\u58eb|\u7855\u58eb|\u672c\u79d1|\u5927\u4e13|\u4e13\u79d1|\u9ad8\u4e2d)/i],
+      ['school', /(?:\u6bd5\u4e1a\u9662\u6821|\u5b66\u6821|\u9662\u6821)[:\s]*([^\n|]{2,40}(?:\u5927\u5b66|\u5b66\u9662|University|College))/i],
+      ['major', /(?:\u4e13\u4e1a)[:\s]*([^\n|]{2,40})/i],
+      ['degree', /(?:\u5b66\u4f4d)[:\s]*([^\n|]{2,20})/i],
+      ['graduateDate', /(?:\u6bd5\u4e1a\u65f6\u95f4|\u6bd5\u4e1a\u65e5\u671f)[:\s]*(\d{4}[./-]\d{1,2})/i],
+      ['expectedCity', /(?:\u671f\u671b\u57ce\u5e02|\u610f\u5411\u57ce\u5e02)[:\s]*([^\n|]{2,30})/i],
+      ['expectedJob', /(?:\u671f\u671b\u5c97\u4f4d|\u610f\u5411\u5c97\u4f4d|\u804c\u4f4d\u65b9\u5411)[:\s]*([^\n|]{2,40})/i],
+      ['expectedSalary', /(?:\u671f\u671b\u85aa\u8d44|\u671f\u671b\u6708\u85aa|\u85aa\u8d44\u8981\u6c42)[:\s]*([^\n|]{2,30})/i]
     ];
-    directMatchers.forEach(([key, regex]) => { const match = cleaned.match(regex); if (match && !fields[key]) { fields[key] = tidyValue(match[1]); hits.push(key); } });
-    if (!fields.name) { const firstLine = cleaned.split('\n').map((line) => line.trim()).find(Boolean) || ''; if (/^[\u4e00-\u9fa5]{2,4}$/.test(firstLine)) { fields.name = firstLine; hits.push('name'); } }
-    [['skills', ['专业技能', '技能', '技能标签']], ['project', ['项目经历', '项目经验']], ['internship', ['实习经历', '工作经历', '实践经历']], ['educationDetail', ['教育经历']], ['selfIntro', ['自我评价', '个人优势', '个人总结', '自我介绍']], ['award', ['获奖经历', '获奖情况', '奖励']], ['certificate', ['证书', '资格证书']], ['campus', ['校园经历', '学生工作', '社团经历']], ['languages', ['语言能力', '外语']]].forEach(([field, titles]) => { if (!fields[field]) { const block = findSection(cleaned, titles); if (block) { fields[field] = block; hits.push(field); } } });
-    fields.custom = cleaned.slice(0, 8000); return { fields, hits };
+    directMatchers.forEach(([key, regex]) => {
+      const match = cleaned.match(regex) || compact.match(regex);
+      if (match) setField(key, match[1]);
+    });
+    const anywhereMatchers = [
+      ['phone', /((?:\+?86[-\s]?)?1[3-9]\d{9})/],
+      ['email', /([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i],
+      ['github', /(https?:\/\/github\.com\/[^\s/]+(?:\/[^\s]+)?)/i],
+      ['linkedin', /(https?:\/\/[^\s]*linkedin\.com\/[^\s]+)/i],
+      ['portfolio', /(https?:\/\/[^\s]+(?:portfolio|blog|site|me|top|cn|com))/i],
+      ['education', /(\u535a\u58eb|\u7855\u58eb|\u672c\u79d1|\u5927\u4e13|\u4e13\u79d1|\u9ad8\u4e2d)/],
+      ['school', /([\u4e00-\u9fa5A-Za-z]{2,40}(?:\u5927\u5b66|\u5b66\u9662|University|College))/]
+    ];
+    anywhereMatchers.forEach(([key, regex]) => {
+      const match = compact.match(regex) || cleaned.match(regex);
+      if (match) setField(key, match[1]);
+    });
+    if (!fields.name) {
+      const candidate = cleaned.split('\n').map((line) => line.replace(/\s+/g, '').trim()).filter(Boolean).slice(0, 8).find((line) => /^[\u4e00-\u9fa5\u00b7]{2,6}$/.test(line));
+      if (candidate) setField('name', candidate);
+    }
+    if (!fields.graduateDate) {
+      const graduateMatch = compact.match(/(20\d{2}[./-]\d{1,2})(?:\u6bd5\u4e1a|graduat)/i);
+      if (graduateMatch) setField('graduateDate', graduateMatch[1]);
+    }
+    [[
+      'skills', ['\u4e13\u4e1a\u6280\u80fd', '\u6280\u80fd', '\u6280\u80fd\u6807\u7b7e']
+    ], [
+      'project', ['\u9879\u76ee\u7ecf\u5386', '\u9879\u76ee\u7ecf\u9a8c']
+    ], [
+      'internship', ['\u5b9e\u4e60\u7ecf\u5386', '\u5de5\u4f5c\u7ecf\u5386', '\u5b9e\u8df5\u7ecf\u5386']
+    ], [
+      'educationDetail', ['\u6559\u80b2\u7ecf\u5386']
+    ], [
+      'selfIntro', ['\u81ea\u6211\u8bc4\u4ef7', '\u4e2a\u4eba\u4f18\u52bf', '\u4e2a\u4eba\u603b\u7ed3', '\u81ea\u6211\u4ecb\u7ecd']
+    ], [
+      'award', ['\u83b7\u5956\u7ecf\u5386', '\u83b7\u5956\u60c5\u51b5', '\u5956\u52b1']
+    ], [
+      'certificate', ['\u8bc1\u4e66', '\u8d44\u683c\u8bc1\u4e66']
+    ], [
+      'campus', ['\u6821\u56ed\u7ecf\u5386', '\u5b66\u751f\u5de5\u4f5c', '\u793e\u56e2\u7ecf\u5386']
+    ], [
+      'languages', ['\u8bed\u8a00\u80fd\u529b', '\u5916\u8bed']
+    ]].forEach(([field, titles]) => {
+      if (fields[field]) return;
+      const block = findSection(cleaned, titles) || findSection(compact, titles);
+      if (block) setField(field, block);
+    });
+    fields.custom = cleaned.slice(0, 8000);
+    return { fields, hits };
   }
-  function normalizeText(text) { return String(text).replace(/\r/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/[：﹕]/g, ':').trim(); }
-  function findSection(text, titles) { const lines = text.split('\n').map((line) => line.trim()).filter(Boolean); for (let i = 0; i < lines.length; i += 1) { const hit = titles.find((item) => lines[i].toLowerCase().includes(String(item).toLowerCase())); if (!hit) continue; const block = []; for (let j = i + 1; j < lines.length && block.join('\n').length < 1600; j += 1) { if (SECTION_TITLES.includes(lines[j]) && block.length >= 2) break; block.push(lines[j]); } const result = block.join('\n').trim(); if (result) return result; } return ''; }
+  function normalizeText(text) { return String(text).replace(/\r/g, '').replace(/\u00a0/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').replace(/[\uFF1A\uFE55]/g, ':').trim(); }
+  function compactResumeText(text) { return String(text || '').replace(/\r/g, '').replace(/([\u4e00-\u9fa5A-Za-z0-9@._%+-])\s+(?=[\u4e00-\u9fa5A-Za-z0-9@._%+-])/g, '$1').replace(/\s*:\s*/g, ':').replace(/\n{3,}/g, '\n\n').trim(); }
+  function findSection(text, titles) { const lines = String(text || '').split('\n').map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean); for (let i = 0; i < lines.length; i += 1) { const normalizedLine = lines[i].replace(/\s+/g, '').toLowerCase(); const hit = titles.find((item) => normalizedLine.includes(String(item).replace(/\s+/g, '').toLowerCase())); if (!hit) continue; const block = []; for (let j = i + 1; j < lines.length && block.join('\n').length < 1600; j += 1) { const sectionLine = lines[j].replace(/\s+/g, ''); if (SECTION_TITLES.some((title) => sectionLine.includes(String(title).replace(/\s+/g, ''))) && block.length >= 2) break; block.push(lines[j]); } const result = block.join('\n').trim(); if (result) return result; } return ''; }
   function tidyValue(value) { return String(value).replace(/\s+/g, ' ').trim(); }
   function detectQuestionAnswer(meta, profile) {
     const templates = ensureTemplates(profile);
